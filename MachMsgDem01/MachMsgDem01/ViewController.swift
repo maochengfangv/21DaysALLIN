@@ -171,6 +171,8 @@ final class ViewController: UIViewController {
     }
 
     private func residentMemoryBytes() -> UInt64 {
+        // 读取当前进程的 resident memory（物理内存常驻集合，非虚拟地址空间）。
+        // 使用 task_info(MACH_TASK_BASIC_INFO) 获取 mach_task_basic_info.resident_size。
         var info = mach_task_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.stride / MemoryLayout<natural_t>.stride)
 
@@ -205,6 +207,9 @@ final class ViewController: UIViewController {
         memoryWorkerQueue.async { [weak self] in
             guard let self else { return }
             while self.stateQueue.sync(execute: { self.isMemoryChurnRunning }) {
+                // 关键点：用 autoreleasepool 包裹一轮“密集临时对象创建”。
+                // - Swift/ObjC 互操作时很多 Foundation 对象会走 autorelease。
+                // - pool 结束时统一 drain，会表现为 resident memory 的“上升 → 回落/波动”。
                 autoreleasepool {
                     var holder: [AnyObject] = []
                     holder.reserveCapacity(20000)
@@ -265,6 +270,8 @@ final class ViewController: UIViewController {
         let alreadyRunning = stateQueue.sync { isMachReceiverRunning }
         guard !alreadyRunning else { return }
 
+        // 关键点：创建一个 Mach 接收端口（receive right），用于让接收线程在 mach_msg(RCV) 上“真实阻塞”。
+        // port 只是一个 name；right 表示权限（receive / send / send-once 等）。
         var port: mach_port_t = 0
         var kr = mach_port_allocate(mach_task_self_, mach_port_right_t(MACH_PORT_RIGHT_RECEIVE), &port)
         guard kr == KERN_SUCCESS else {
@@ -272,6 +279,7 @@ final class ViewController: UIViewController {
             return
         }
 
+        // 给同一个 port name 再插入 send right（make-send），让本进程可以向该 port 发送消息来唤醒接收线程。
         kr = mach_port_insert_right(mach_task_self_, port, port, mach_msg_type_name_t(MACH_MSG_TYPE_MAKE_SEND))
         guard kr == KERN_SUCCESS else {
             mach_port_destroy(mach_task_self_, port)
@@ -333,6 +341,9 @@ final class ViewController: UIViewController {
         msg.value = value
         let size = mach_msg_size_t(MemoryLayout<SimpleMachMessage>.size)
 
+        // msgh_bits 描述 header 里各个 port 字段携带的 right disposition。
+        // 这里我们只用 remote_port（目标 port），local_port 为 null。
+        // Swift 看不到 C 宏 MACH_MSGH_BITS，所以手动按位构造：remote | (local << 8)
         let remoteBits = UInt32(MACH_MSG_TYPE_COPY_SEND)
         let localBits: UInt32 = 0
         msg.header.msgh_bits = mach_msg_bits_t(remoteBits | (localBits << 8))
@@ -341,6 +352,7 @@ final class ViewController: UIViewController {
         msg.header.msgh_local_port = mach_port_t(MACH_PORT_NULL)
         msg.header.msgh_id = id
 
+        // 发送：内核把消息排入 port 的队列；如果有线程正在该 port 上阻塞接收，会被唤醒。
         let kr: kern_return_t = withUnsafeMutableBytes(of: &msg) { raw -> kern_return_t in
             let headerPtr = raw.baseAddress!.assumingMemoryBound(to: mach_msg_header_t.self)
             return mach_msg(headerPtr, MACH_SEND_MSG, size, 0, mach_port_t(MACH_PORT_NULL), 0, mach_port_t(MACH_PORT_NULL))
@@ -371,6 +383,10 @@ final class ViewController: UIViewController {
             msg.header.msgh_size = size
             msg.header.msgh_local_port = port
 
+            // 接收（核心阻塞点）：
+            // - MACH_RCV_MSG + timeout=0 表示无限等待
+            // - 当 port 队列为空时，该线程会在内核里睡眠
+            // - 在 Xcode 里通常能看到栈顶停在 mach_msg*_trap（如 mach_msg2_trap / mach_msg_trap / mach_msg_overwrite_trap）
             let kr: kern_return_t = withUnsafeMutableBytes(of: &msg) { raw -> kern_return_t in
                 let headerPtr = raw.baseAddress!.assumingMemoryBound(to: mach_msg_header_t.self)
                 return mach_msg(headerPtr, MACH_RCV_MSG, 0, size, port, 0, mach_port_t(MACH_PORT_NULL))
