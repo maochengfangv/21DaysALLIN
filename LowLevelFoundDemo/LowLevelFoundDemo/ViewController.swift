@@ -101,6 +101,14 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
 
     private var lastJailbreakReportJSON: String = ""
 
+    private let rolloutTitleLabel = UILabel()
+    private let rolloutVariantControl = UISegmentedControl(items: ["Stable", "Canary"])
+    private let rolloutFaultControl = UISegmentedControl(items: ["OK", "Fault"])
+    private let rolloutApplyButton = UIButton(type: .system)
+    private let rolloutResetButton = UIButton(type: .system)
+    private let rolloutStatusLabel = UILabel()
+    private let rolloutTextView = UITextView()
+
     private var defaultModeTimer: Timer?
     private var commonModeTimer: Timer?
     private var defaultModeTick = 0
@@ -286,6 +294,42 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
             securityButtons,
             securityTextView
         ]))
+
+        rolloutTitleLabel.font = .preferredFont(forTextStyle: .headline)
+        rolloutTitleLabel.text = "7. 灰度发布与回滚（本地模拟）"
+
+        rolloutVariantControl.selectedSegmentIndex = loadRolloutVariantIndex()
+        rolloutFaultControl.selectedSegmentIndex = loadRolloutFaultIndex()
+
+        rolloutVariantControl.addTarget(self, action: #selector(onRolloutSelectionChanged), for: .valueChanged)
+        rolloutFaultControl.addTarget(self, action: #selector(onRolloutSelectionChanged), for: .valueChanged)
+
+        rolloutApplyButton.setTitle("Apply", for: .normal)
+        rolloutApplyButton.addTarget(self, action: #selector(onRolloutApply), for: .touchUpInside)
+
+        rolloutResetButton.setTitle("Reset", for: .normal)
+        rolloutResetButton.addTarget(self, action: #selector(onRolloutReset), for: .touchUpInside)
+
+        rolloutStatusLabel.font = .preferredFont(forTextStyle: .subheadline)
+        rolloutStatusLabel.numberOfLines = 0
+
+        let rolloutButtons = UIStackView(arrangedSubviews: [rolloutApplyButton, rolloutResetButton])
+        rolloutButtons.axis = .horizontal
+        rolloutButtons.spacing = 12
+        rolloutButtons.distribution = .fillEqually
+
+        configureTextView(rolloutTextView, height: 180)
+
+        contentStack.addArrangedSubview(makeSection([
+            rolloutTitleLabel,
+            rolloutVariantControl,
+            rolloutFaultControl,
+            rolloutButtons,
+            rolloutStatusLabel,
+            rolloutTextView
+        ]))
+
+        renderRolloutStatus(persist: false)
     }
 
     private func makeSection(_ views: [UIView]) -> UIView {
@@ -332,6 +376,8 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         interviewTextView.text = renderInterviewBank()
         perfTextView.text = "点击 Snapshot 观察 dyld image 数量与主二进制 load commands 概览。\n点击 Benchmark 比较 dlopen 的 Lazy/Now（演示 dyld 绑定策略对启动/首次调用的影响）。\n点击 Copy JSON 复制结构化报告（type/timestamp/text）。"
         securityTextView.text = "选择 Real/Demo 后点击 Inspect 输出：LC_CODE_SIGNATURE/段权限/VM protections + 越狱检测证据与评分。\n点击 Copy JSON 可复制结构化报告。"
+        rolloutTextView.text = "选择 Stable/Canary 与 OK/Fault，点击 Apply 观察最终生效版本与回滚兜底。"
+        renderRolloutStatus(persist: false)
     }
 
     @objc private func onParseMachO() {
@@ -405,6 +451,97 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
             lastJailbreakReportJSON = renderJailbreakReportJSON(simulate: simulate)
         }
         UIPasteboard.general.string = lastJailbreakReportJSON
+    }
+
+    @objc private func onRolloutSelectionChanged() {
+        renderRolloutStatus(persist: false)
+    }
+
+    @objc private func onRolloutApply() {
+        renderRolloutStatus(persist: true)
+    }
+
+    @objc private func onRolloutReset() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "demo.rollout.variant")
+        defaults.removeObject(forKey: "demo.rollout.fault")
+        rolloutVariantControl.selectedSegmentIndex = loadRolloutVariantIndex()
+        rolloutFaultControl.selectedSegmentIndex = loadRolloutFaultIndex()
+        renderRolloutStatus(persist: false)
+    }
+
+    private func loadRolloutVariantIndex() -> Int {
+        let v = UserDefaults.standard.integer(forKey: "demo.rollout.variant")
+        return (v == 1) ? 1 : 0
+    }
+
+    private func loadRolloutFaultIndex() -> Int {
+        return UserDefaults.standard.bool(forKey: "demo.rollout.fault") ? 1 : 0
+    }
+
+    private enum RolloutError: Error {
+        case simulatedReleaseFault
+    }
+
+    private func renderRolloutStatus(persist: Bool) {
+        let selectedVariant = rolloutVariantControl.selectedSegmentIndex
+        let selectedFault = rolloutFaultControl.selectedSegmentIndex == 1
+
+        if persist {
+            let defaults = UserDefaults.standard
+            defaults.set(selectedVariant, forKey: "demo.rollout.variant")
+            defaults.set(selectedFault, forKey: "demo.rollout.fault")
+        }
+
+        let selected = (selectedVariant == 1) ? "Canary" : "Stable"
+        var effective = selected
+        var reason = "config"
+        var payload = ""
+
+        if selectedVariant == 1 {
+            do {
+                payload = try renderCanaryFeature(simulateFault: selectedFault)
+            } catch {
+                effective = "Stable"
+                reason = "rollback(hardcoded)"
+                payload = renderStableFeature()
+            }
+        } else {
+            payload = renderStableFeature()
+        }
+
+        rolloutStatusLabel.text = "selected: \(selected)\neffective: \(effective)\nreason: \(reason)"
+        rolloutTextView.text = payload
+    }
+
+    private func renderStableFeature() -> String {
+        let dict: [String: Any] = [
+            "version": "stable",
+            "ts": Date().timeIntervalSince1970,
+            "message": "稳定版本逻辑（老分支）"
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: data, encoding: .utf8) {
+            return s
+        }
+        return "{}"
+    }
+
+    private func renderCanaryFeature(simulateFault: Bool) throws -> String {
+        if simulateFault {
+            throw RolloutError.simulatedReleaseFault
+        }
+        let dict: [String: Any] = [
+            "version": "canary",
+            "ts": Date().timeIntervalSince1970,
+            "message": "灰度版本逻辑（新分支）",
+            "extra": ["new_ui": true, "algo": "v2"]
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: data, encoding: .utf8) {
+            return s
+        }
+        return "{}"
     }
 
     private func startRunLoopDemo() {
