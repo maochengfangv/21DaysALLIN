@@ -7,6 +7,55 @@
 
 import UIKit
 import MachO
+import Darwin
+import Darwin.Mach
+
+private typealias DyldAddImageCallback = @convention(c) (UnsafePointer<mach_header>?, Int) -> Void
+
+private let dyldEventQueue = DispatchQueue(label: "demo.dyld.events")
+private var dyldAddImageEvents: [String] = []
+private var dyldObserverRegistered = false
+private let dyldStartAbsTime: UInt64 = mach_absolute_time()
+private let dyldTimebase: mach_timebase_info_data_t = {
+    var tb = mach_timebase_info_data_t()
+    mach_timebase_info(&tb)
+    return tb
+}()
+
+private func dyldNowMS() -> Double {
+    let elapsed = mach_absolute_time() &- dyldStartAbsTime
+    let nanos = Double(elapsed) * Double(dyldTimebase.numer) / Double(dyldTimebase.denom)
+    return nanos / 1_000_000.0
+}
+
+private let dyldAddImageCallback: DyldAddImageCallback = { header, slide in
+    let ms = dyldNowMS()
+    var path = "(unknown)"
+    if let header {
+        let imageCount = _dyld_image_count()
+        for i in 0..<imageCount {
+            if let h = _dyld_get_image_header(i), h == header {
+                if let name = _dyld_get_image_name(i) {
+                    path = String(cString: name)
+                }
+                break
+            }
+        }
+    }
+
+    dyldEventQueue.sync {
+        dyldAddImageEvents.append(String(format: "%.3f ms add_image slide=0x%llx %@", ms, UInt64(bitPattern: Int64(slide)), path))
+        if dyldAddImageEvents.count > 80 {
+            dyldAddImageEvents.removeFirst(dyldAddImageEvents.count - 80)
+        }
+    }
+}
+
+private func ensureDyldObserverRegistered() {
+    if dyldObserverRegistered { return }
+    dyldObserverRegistered = true
+    _dyld_register_func_for_add_image(dyldAddImageCallback)
+}
 
 final class ViewController: UIViewController, UIScrollViewDelegate {
     private let scrollView = UIScrollView()
@@ -36,6 +85,19 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
     private let interviewActionButton = UIButton(type: .system)
     private let interviewTextView = UITextView()
 
+    private let perfTitleLabel = UILabel()
+    private let perfSnapshotButton = UIButton(type: .system)
+    private let perfBenchmarkButton = UIButton(type: .system)
+    private let perfTextView = UITextView()
+
+    private let securityTitleLabel = UILabel()
+    private let securityModeControl = UISegmentedControl(items: ["Real", "Demo"])
+    private let securityInspectButton = UIButton(type: .system)
+    private let securityCopyJSONButton = UIButton(type: .system)
+    private let securityTextView = UITextView()
+
+    private var lastJailbreakReportJSON: String = ""
+
     private var defaultModeTimer: Timer?
     private var commonModeTimer: Timer?
     private var defaultModeTick = 0
@@ -51,6 +113,7 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         view.backgroundColor = .systemBackground
         title = "LowLevelFoundDemo"
 
+        ensureDyldObserverRegistered()
         buildUI()
         renderInitialContent()
     }
@@ -141,10 +204,37 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         interviewActionButton.addTarget(self, action: #selector(onLoadInterviewBank), for: .touchUpInside)
         configureTextView(interviewTextView, height: 320)
 
+        perfTitleLabel.font = .preferredFont(forTextStyle: .headline)
+        perfTitleLabel.text = "5. 启动/首帧性能（dyld 工作量）"
+        perfSnapshotButton.setTitle("Snapshot dyld Workload", for: .normal)
+        perfSnapshotButton.addTarget(self, action: #selector(onPerfSnapshot), for: .touchUpInside)
+        perfBenchmarkButton.setTitle("Benchmark dlopen (Lazy vs Now)", for: .normal)
+        perfBenchmarkButton.addTarget(self, action: #selector(onPerfBenchmark), for: .touchUpInside)
+        configureTextView(perfTextView, height: 240)
+
+        securityTitleLabel.font = .preferredFont(forTextStyle: .headline)
+        securityTitleLabel.text = "6. 安全与签名（段权限/代码签名信息）"
+
+        securityModeControl.selectedSegmentIndex = 0
+        securityModeControl.addTarget(self, action: #selector(onSecurityModeChanged), for: .valueChanged)
+
+        securityInspectButton.setTitle("Inspect", for: .normal)
+        securityInspectButton.addTarget(self, action: #selector(onSecurityInspect), for: .touchUpInside)
+
+        securityCopyJSONButton.setTitle("Copy JSON", for: .normal)
+        securityCopyJSONButton.addTarget(self, action: #selector(onSecurityCopyJSON), for: .touchUpInside)
+
+        configureTextView(securityTextView, height: 260)
+
         let runLoopButtons = UIStackView(arrangedSubviews: [runLoopActionButton, runLoopStopButton])
         runLoopButtons.axis = .horizontal
         runLoopButtons.spacing = 12
         runLoopButtons.distribution = .fillEqually
+
+        let perfButtons = UIStackView(arrangedSubviews: [perfSnapshotButton, perfBenchmarkButton])
+        perfButtons.axis = .horizontal
+        perfButtons.spacing = 12
+        perfButtons.distribution = .fillEqually
 
         contentStack.addArrangedSubview(makeSection([
             introLabel
@@ -172,6 +262,24 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
             interviewTitleLabel,
             interviewActionButton,
             interviewTextView
+        ]))
+
+        contentStack.addArrangedSubview(makeSection([
+            perfTitleLabel,
+            perfButtons,
+            perfTextView
+        ]))
+
+        let securityButtons = UIStackView(arrangedSubviews: [securityInspectButton, securityCopyJSONButton])
+        securityButtons.axis = .horizontal
+        securityButtons.spacing = 12
+        securityButtons.distribution = .fillEqually
+
+        contentStack.addArrangedSubview(makeSection([
+            securityTitleLabel,
+            securityModeControl,
+            securityButtons,
+            securityTextView
         ]))
     }
 
@@ -217,6 +325,8 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         renderRunLoopStatus()
         runLoopLogTextView.text = "点击 Start RunLoop Demo 后，水平拖动上方区域。\n预期：Default timer 在 tracking 期间暂停，Common timer 继续增长。"
         interviewTextView.text = renderInterviewBank()
+        perfTextView.text = "点击 Snapshot 观察 dyld image 数量与主二进制 load commands 概览。\n点击 Benchmark 比较 dlopen 的 Lazy/Now（演示 dyld 绑定策略对启动/首次调用的影响）。"
+        securityTextView.text = "选择 Real/Demo 后点击 Inspect 输出：LC_CODE_SIGNATURE/段权限/VM protections + 越狱检测证据与评分。\n点击 Copy JSON 可复制结构化报告。"
     }
 
     @objc private func onParseMachO() {
@@ -238,6 +348,33 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
 
     @objc private func onLoadInterviewBank() {
         interviewTextView.text = renderInterviewBank()
+    }
+
+    @objc private func onPerfSnapshot() {
+        perfTextView.text = renderDyldWorkloadSnapshot()
+    }
+
+    @objc private func onPerfBenchmark() {
+        perfTextView.text = renderDlopenBenchmark()
+    }
+
+    @objc private func onSecurityModeChanged() {
+        lastJailbreakReportJSON = ""
+        securityTextView.text = "选择 Real/Demo 后点击 Inspect 输出：LC_CODE_SIGNATURE/段权限/VM protections + 越狱检测证据与评分。\n点击 Copy JSON 可复制结构化报告。"
+    }
+
+    @objc private func onSecurityInspect() {
+        let simulate = securityModeControl.selectedSegmentIndex == 1
+        lastJailbreakReportJSON = renderJailbreakReportJSON(simulate: simulate)
+        securityTextView.text = renderSecurityAndSigningReport(simulate: simulate)
+    }
+
+    @objc private func onSecurityCopyJSON() {
+        let simulate = securityModeControl.selectedSegmentIndex == 1
+        if lastJailbreakReportJSON.isEmpty {
+            lastJailbreakReportJSON = renderJailbreakReportJSON(simulate: simulate)
+        }
+        UIPasteboard.general.string = lastJailbreakReportJSON
     }
 
     private func startRunLoopDemo() {
@@ -330,43 +467,21 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         let imageCount = _dyld_image_count()
         lines.append("dyld image count: \(imageCount)")
 
-        guard let executablePath = Bundle.main.executablePath else {
-            return "无法读取主程序 executablePath。"
+        guard let main = mainMachO64() else {
+            return "未能定位主可执行文件的 Mach-O header。"
         }
 
-        let executableName = URL(fileURLWithPath: executablePath).lastPathComponent
-        var matchIndex: UInt32?
-        for index in 0..<imageCount {
-            guard let cName = _dyld_get_image_name(index) else { continue }
-            let path = String(cString: cName)
-            if path == executablePath || path.hasSuffix("/\(executableName)") {
-                matchIndex = index
-                break
-            }
-        }
-
-        guard let imageIndex = matchIndex, let headerPointer = _dyld_get_image_header(imageIndex) else {
-            return "没有在 dyld image list 中找到主可执行文件。"
-        }
-
-        let magic = headerPointer.pointee.magic
-        guard magic == MH_MAGIC_64 || magic == MH_CIGAM_64 else {
-            return "当前 demo 仅处理 64-bit Mach-O，实际 magic = \(magic)。"
-        }
-
-        let header = UnsafeRawPointer(headerPointer).assumingMemoryBound(to: mach_header_64.self)
-        let slide = _dyld_get_image_vmaddr_slide(imageIndex)
-        lines.append("image: \(executablePath)")
-        lines.append("slide: \(formatHex(UInt64(bitPattern: Int64(slide))))")
-        lines.append("ncmds: \(header.pointee.ncmds), sizeofcmds: \(header.pointee.sizeofcmds)")
+        lines.append("image: \(main.path)")
+        lines.append("slide: \(formatHex(UInt64(bitPattern: Int64(main.slide))))")
+        lines.append("ncmds: \(main.header.pointee.ncmds), sizeofcmds: \(main.header.pointee.sizeofcmds)")
         lines.append("")
 
         // Mach-O header 后面紧跟着一串 load commands。
         // 这里按 cmdsize 线性推进指针，只挑 LC_SEGMENT_64 做段表展示。
-        var cursor = UnsafeRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)
+        var cursor = UnsafeRawPointer(main.header).advanced(by: MemoryLayout<mach_header_64>.size)
         var segmentCount = 0
 
-        for _ in 0..<Int(header.pointee.ncmds) {
+        for _ in 0..<Int(main.header.pointee.ncmds) {
             let loadCommand = cursor.assumingMemoryBound(to: load_command.self).pointee
 
             if loadCommand.cmd == UInt32(LC_SEGMENT_64) {
@@ -375,7 +490,7 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
 
                 let segmentName = fixedWidthString(from: segment.segname)
                 lines.append("[\(segmentCount)] \(segmentName.isEmpty ? "<unnamed>" : segmentName)")
-                lines.append("  vmaddr=\(formatHex(segment.vmaddr)) vmsize=\(formatHex(segment.vmsize)) fileoff=\(formatHex(segment.fileoff)) nsects=\(segment.nsects)")
+                lines.append("  vmaddr=\(formatHex(segment.vmaddr)) vmsize=\(formatHex(segment.vmsize)) fileoff=\(formatHex(segment.fileoff)) nsects=\(segment.nsects) initprot=\(vmProtString(segment.initprot)) maxprot=\(vmProtString(segment.maxprot))")
 
                 // segment_command_64 后面紧跟 section_64 数组，所以继续顺序解析 section。
                 var sectionCursor = cursor.advanced(by: MemoryLayout<segment_command_64>.size)
@@ -402,6 +517,395 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         lines.append("2. 段表解析重点看 LC_SEGMENT_64 / segment_command_64 / section_64。")
         lines.append("3. 面试里常问 __TEXT、__DATA_CONST、__LINKEDIT 的作用与 dyld slide 含义。")
         return lines.joined(separator: "\n")
+    }
+
+    private func renderDyldWorkloadSnapshot() -> String {
+        ensureDyldObserverRegistered()
+        var lines: [String] = []
+        let imageCount = _dyld_image_count()
+        lines.append("dyld image count: \(imageCount)")
+
+        var totalCmds: UInt64 = 0
+        var totalCmdBytes: UInt64 = 0
+
+        let t0 = clockNow()
+        for i in 0..<imageCount {
+            guard let header = _dyld_get_image_header(i) else { continue }
+            if header.pointee.magic == MH_MAGIC_64 || header.pointee.magic == MH_CIGAM_64 {
+                let h64 = UnsafeRawPointer(header).assumingMemoryBound(to: mach_header_64.self)
+                totalCmds += UInt64(h64.pointee.ncmds)
+                totalCmdBytes += UInt64(h64.pointee.sizeofcmds)
+            }
+        }
+        let elapsed = clockElapsedMS(since: t0)
+        lines.append("iterate images (sum ncmds/sizeofcmds): \(String(format: "%.3f", elapsed)) ms")
+        lines.append("total ncmds: \(totalCmds), total sizeofcmds: \(totalCmdBytes) bytes")
+        lines.append("")
+
+        if let main = mainMachO64() {
+            lines.append("main image: \(main.path)")
+            lines.append("slide: \(formatHex(UInt64(bitPattern: Int64(main.slide))))")
+            lines.append("main ncmds: \(main.header.pointee.ncmds), sizeofcmds: \(main.header.pointee.sizeofcmds)")
+        }
+
+        lines.append("")
+        lines.append("loaded images (top 24):")
+        let listLimit = min(Int(imageCount), 24)
+        for i in 0..<listLimit {
+            guard let name = _dyld_get_image_name(UInt32(i)) else { continue }
+            let path = String(cString: name)
+            let slide = _dyld_get_image_vmaddr_slide(UInt32(i))
+            lines.append(String(format: "  [%02d] slide=0x%llx %@", i, UInt64(bitPattern: Int64(slide)), path))
+        }
+
+        lines.append("")
+        lines.append("+load execution (instrumented, app-side):")
+        lines.append(fetchObjCLoadLogs())
+
+        lines.append("")
+        lines.append("dyld add_image events (since observer registration):")
+        let events = dyldEventQueue.sync { dyldAddImageEvents }
+        if events.isEmpty {
+            lines.append("  (none yet) try running dlopen benchmark to trigger add_image")
+        } else {
+            lines.append(contentsOf: events.map { "  \($0)" })
+        }
+
+        lines.append("")
+        lines.append("提示：")
+        lines.append("- 启动慢常和 dyld 需要处理的镜像数量、绑定/修指针量（fixups）相关。")
+        lines.append("- 工程层面“加库变慢”，通常体现在 imageCount 增加、绑定信息变多。")
+        lines.append("- 系统/三方库的 +load 执行细节需要在对应镜像里显式埋点或借助更底层的 tracing 工具；本 demo 展示的是可控的 app 侧 +load 顺序与线程信息。")
+        return lines.joined(separator: "\n")
+    }
+
+    private func renderDlopenBenchmark() -> String {
+        ensureDyldObserverRegistered()
+        let candidates: [String] = [
+            "/usr/lib/libobjc.A.dylib",
+            "/usr/lib/libSystem.B.dylib",
+            "/usr/lib/libc++.1.dylib",
+            "/usr/lib/libsqlite3.dylib"
+        ]
+
+        var openedPath: String?
+        for path in candidates {
+            if FileManager.default.fileExists(atPath: path) {
+                openedPath = path
+                break
+            }
+        }
+
+        guard let path = openedPath else {
+            return "未找到可用于 dlopen 的系统 dylib 路径（模拟器/系统差异）。"
+        }
+
+        func measure(flag: Int32, rounds: Int) -> (ms: Double, ok: Int, fail: Int) {
+            var ok = 0
+            var fail = 0
+            let start = clockNow()
+            for _ in 0..<rounds {
+                if let handle = dlopen(path, flag) {
+                    ok += 1
+                    dlclose(handle)
+                } else {
+                    fail += 1
+                }
+            }
+            let ms = clockElapsedMS(since: start)
+            return (ms, ok, fail)
+        }
+
+        let rounds = 200
+        let lazy = measure(flag: RTLD_LAZY, rounds: rounds)
+        let now = measure(flag: RTLD_NOW, rounds: rounds)
+
+        var lines: [String] = []
+        lines.append("dlopen benchmark target: \(path)")
+        lines.append("rounds: \(rounds)")
+        lines.append(String(format: "RTLD_LAZY: %.3f ms (ok=%d fail=%d)", lazy.ms, lazy.ok, lazy.fail))
+        lines.append(String(format: "RTLD_NOW : %.3f ms (ok=%d fail=%d)", now.ms, now.ok, now.fail))
+        lines.append("")
+        lines.append("解释：")
+        lines.append("- RTLD_NOW 倾向更早做符号解析（更接近 eager bind）。")
+        lines.append("- RTLD_LAZY 把部分解析延迟到首次使用（更接近 lazy bind）。")
+        lines.append("- 在系统库已缓存/已加载的情况下差异可能很小，但概念对应 dyld 的启动/首帧权衡。")
+        return lines.joined(separator: "\n")
+    }
+
+    private func renderSecurityAndSigningReport(simulate: Bool) -> String {
+        guard let main = mainMachO64() else {
+            return "未能定位主可执行文件的 Mach-O header。"
+        }
+
+        var lines: [String] = []
+        lines.append("main image: \(main.path)")
+        lines.append("slide: \(formatHex(UInt64(bitPattern: Int64(main.slide))))")
+        lines.append("")
+
+        var codeSig: (off: UInt32, size: UInt32)?
+        var encryption: (cryptoff: UInt32, cryptsize: UInt32, cryptid: UInt32)?
+        var segments: [(name: String, vmaddr: UInt64, vmsize: UInt64, initprot: vm_prot_t, maxprot: vm_prot_t)] = []
+
+        var cursor = UnsafeRawPointer(main.header).advanced(by: MemoryLayout<mach_header_64>.size)
+        for _ in 0..<Int(main.header.pointee.ncmds) {
+            let cmd = cursor.assumingMemoryBound(to: load_command.self).pointee
+            if cmd.cmd == UInt32(LC_CODE_SIGNATURE) {
+                let cs = cursor.assumingMemoryBound(to: linkedit_data_command.self).pointee
+                codeSig = (cs.dataoff, cs.datasize)
+            } else if cmd.cmd == UInt32(LC_ENCRYPTION_INFO_64) {
+                let e = cursor.assumingMemoryBound(to: encryption_info_command_64.self).pointee
+                encryption = (e.cryptoff, e.cryptsize, e.cryptid)
+            } else if cmd.cmd == UInt32(LC_SEGMENT_64) {
+                let seg = cursor.assumingMemoryBound(to: segment_command_64.self).pointee
+                let name = fixedWidthString(from: seg.segname)
+                segments.append((name: name, vmaddr: seg.vmaddr, vmsize: seg.vmsize, initprot: seg.initprot, maxprot: seg.maxprot))
+            }
+            cursor = cursor.advanced(by: Int(cmd.cmdsize))
+        }
+
+        if let codeSig {
+            lines.append("LC_CODE_SIGNATURE: dataoff=\(formatHex(codeSig.off)) datasize=\(formatHex(codeSig.size))")
+        } else {
+            lines.append("LC_CODE_SIGNATURE: not found")
+        }
+
+        if let encryption {
+            lines.append("LC_ENCRYPTION_INFO_64: cryptoff=\(formatHex(encryption.cryptoff)) cryptsize=\(formatHex(encryption.cryptsize)) cryptid=\(encryption.cryptid)")
+        } else {
+            lines.append("LC_ENCRYPTION_INFO_64: not found")
+        }
+
+        lines.append("")
+        lines.append("segment init/max prot (from Mach-O):")
+        for seg in segments where seg.name == "__TEXT" || seg.name == "__DATA" || seg.name == "__DATA_CONST" || seg.name == "__LINKEDIT" {
+            lines.append("  \(seg.name): init=\(vmProtString(seg.initprot)) max=\(vmProtString(seg.maxprot))")
+        }
+
+        lines.append("")
+        lines.append("runtime VM protections (from mach_vm_region):")
+        for seg in segments where seg.name == "__TEXT" || seg.name == "__DATA" || seg.name == "__DATA_CONST" || seg.name == "__LINKEDIT" {
+            let addr = UInt64(bitPattern: Int64(main.slide)) &+ seg.vmaddr
+            if let info = vmRegionInfo(at: addr) {
+                lines.append("  \(seg.name): cur=\(vmProtString(info.protection)) max=\(vmProtString(info.maxProtection)) regionSize=\(formatHex(info.regionSize))")
+            } else {
+                lines.append("  \(seg.name): vm_region query failed")
+            }
+        }
+
+        lines.append("")
+        lines.append("jailbreak checks (")
+        lines[lines.count - 1] += simulate ? "demo" : "real"
+        lines[lines.count - 1] += "):\n" + renderJailbreakReportText(simulate: simulate)
+
+        lines.append("")
+        lines.append("说明：")
+        lines.append("- 代码签名的 blob 位置通过 LC_CODE_SIGNATURE 指向，iOS 内核/AMFI 会强制校验完整性。")
+        lines.append("- __TEXT 通常为 r-x（不可写），__DATA 多为 r-w，__LINKEDIT 多为 r--。")
+        lines.append("- __DATA_CONST 体现“启动期可写、运行期尽量只读”的策略，用于降低指针表被篡改风险。")
+        lines.append("- 越狱检测属于启发式：单个特征不一定代表越狱，但多个特征同时命中时可信度更高。")
+        return lines.joined(separator: "\n")
+    }
+
+    private struct JailbreakCheck {
+        let key: String
+        let passed: Bool
+        let weight: Int
+        let details: [String]
+    }
+
+    private func renderJailbreakReportText(simulate: Bool) -> String {
+        let report = jailbreakReport(simulate: simulate)
+        var lines: [String] = []
+        lines.append("  environment: \(report.environment)")
+
+        for check in report.checks {
+            if check.passed {
+                lines.append("  \(check.key): ok")
+            } else {
+                lines.append("  \(check.key): HIT")
+                if !check.details.isEmpty {
+                    lines.append(contentsOf: check.details.prefix(12).map { "    - \($0)" })
+                }
+            }
+        }
+
+        lines.append("  summary: score=\(report.score) (0=not detected; higher=more suspicious)")
+        return lines.joined(separator: "\n")
+    }
+
+    private func renderJailbreakReportJSON(simulate: Bool) -> String {
+        let report = jailbreakReport(simulate: simulate)
+        let dict: [String: Any] = [
+            "mode": simulate ? "demo" : "real",
+            "environment": report.environment,
+            "score": report.score,
+            "checks": report.checks.map { c in
+                [
+                    "key": c.key,
+                    "passed": c.passed,
+                    "weight": c.weight,
+                    "details": c.details
+                ]
+            }
+        ]
+
+        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: data, encoding: .utf8) {
+            return s
+        }
+        return "{}"
+    }
+
+    private func jailbreakReport(simulate: Bool) -> (environment: String, score: Int, checks: [JailbreakCheck]) {
+        if simulate {
+            let checks: [JailbreakCheck] = [
+                JailbreakCheck(key: "path scan", passed: false, weight: 3, details: ["/Applications/Cydia.app (simulated)", "/Library/MobileSubstrate/MobileSubstrate.dylib (simulated)", "/var/jb (simulated)"]),
+                JailbreakCheck(key: "sandbox write", passed: false, weight: 2, details: ["wrote /private/lowlevel_found_demo_jb_test.txt (simulated)"]),
+                JailbreakCheck(key: "dyld images", passed: false, weight: 1, details: ["/usr/lib/FridaGadget.dylib (simulated)"]),
+                JailbreakCheck(key: "env vars", passed: false, weight: 1, details: ["DYLD_INSERT_LIBRARIES=/usr/lib/FridaGadget.dylib (simulated)"]),
+                JailbreakCheck(key: "dlsym hooks", passed: false, weight: 2, details: ["MSHookFunction=0x11111111 in /usr/lib/libsubstrate.dylib (simulated)", "rebind_symbols=0x22222222 in /usr/lib/libfishhook.dylib (simulated)"])
+            ]
+            let score = checks.reduce(0) { $0 + $1.weight }
+            return ("simulated", score, checks)
+        }
+
+        #if targetEnvironment(simulator)
+        let environment = "simulator"
+        #else
+        let environment = "device"
+        #endif
+
+        var checks: [JailbreakCheck] = []
+
+        let suspiciousPaths: [String] = [
+            "/Applications/Cydia.app",
+            "/Library/MobileSubstrate/MobileSubstrate.dylib",
+            "/usr/sbin/sshd",
+            "/etc/apt",
+            "/private/var/lib/apt",
+            "/bin/bash",
+            "/usr/bin/ssh",
+            "/var/jb"
+        ]
+
+        var pathDetails: [String] = []
+        for p in suspiciousPaths where FileManager.default.fileExists(atPath: p) {
+            if let d = fileStatDetail(path: p) {
+                pathDetails.append("\(p) \(d)")
+            } else {
+                pathDetails.append("\(p) (stat unavailable)")
+            }
+        }
+        checks.append(JailbreakCheck(key: "path scan", passed: pathDetails.isEmpty, weight: pathDetails.count, details: pathDetails))
+
+        let writeTestTargets: [String] = [
+            "/private/lowlevel_found_demo_jb_test.txt",
+            "/var/tmp/lowlevel_found_demo_jb_test.txt"
+        ]
+
+        var writeSucceeded: [String] = []
+        for target in writeTestTargets {
+            do {
+                try "jb_test".write(toFile: target, atomically: true, encoding: .utf8)
+                writeSucceeded.append(target)
+                try? FileManager.default.removeItem(atPath: target)
+            } catch {
+            }
+        }
+        checks.append(JailbreakCheck(key: "sandbox write", passed: writeSucceeded.isEmpty, weight: writeSucceeded.isEmpty ? 0 : 2, details: writeSucceeded.map { "wrote \($0)" }))
+
+        let suspiciousImageKeywords: [String] = [
+            "MobileSubstrate",
+            "SubstrateLoader",
+            "TweakInject",
+            "libhooker",
+            "frida",
+            "FridaGadget",
+            "cycript",
+            "SSLKillSwitch",
+            "CydiaSubstrate"
+        ]
+
+        var matchedImages: [String] = []
+        let imageCount = _dyld_image_count()
+        if imageCount > 0 {
+            for i in 0..<imageCount {
+                guard let cName = _dyld_get_image_name(i) else { continue }
+                let path = String(cString: cName)
+                for key in suspiciousImageKeywords where path.localizedCaseInsensitiveContains(key) {
+                    matchedImages.append(path)
+                    break
+                }
+            }
+        }
+        checks.append(JailbreakCheck(key: "dyld images", passed: matchedImages.isEmpty, weight: matchedImages.count, details: matchedImages))
+
+        let envKeys = ["DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH"]
+        var envHits: [String] = []
+        for key in envKeys {
+            if let v = getenv(key), let s = String(validatingUTF8: v), !s.isEmpty {
+                envHits.append("\(key)=\(s)")
+            }
+        }
+        checks.append(JailbreakCheck(key: "env vars", passed: envHits.isEmpty, weight: envHits.count, details: envHits))
+
+        let symLines = symbolHookCheckLines()
+        checks.append(JailbreakCheck(key: "dlsym hooks", passed: symLines.isEmpty, weight: symLines.count, details: symLines))
+
+        let score = checks.reduce(0) { $0 + $1.weight }
+        return (environment, score, checks)
+    }
+
+    private func fileStatDetail(path: String) -> String? {
+        var st = stat()
+        let rc = path.withCString { cPath in
+            lstat(cPath, &st)
+        }
+        guard rc == 0 else { return nil }
+
+        let mode = UInt32(st.st_mode)
+        let typeBits = mode & UInt32(S_IFMT)
+        let isSymlink = typeBits == UInt32(S_IFLNK)
+        let perms = mode & 0o777
+
+        return String(format: "(type=%@ perms=%03o uid=%u gid=%u)", isSymlink ? "symlink" : "file/dir", perms, st.st_uid, st.st_gid)
+    }
+
+    private func symbolHookCheckLines() -> [String] {
+        let symbols: [String] = [
+            "MSHookFunction",
+            "MSFindSymbol",
+            "MSGetImageByName",
+            "LHHookFunctions",
+            "LHHookMessageEx",
+            "frida_agent_main",
+            "gum_init_embedded",
+            "rebind_symbols"
+        ]
+
+        guard let handle = dlopen(nil, RTLD_NOW) else { return [] }
+        defer { dlclose(handle) }
+
+        var hits: [String] = []
+        for sym in symbols {
+            let ptr = dlsym(handle, sym)
+            guard let ptr else { continue }
+            let owner = imageOwner(of: ptr) ?? "(unknown image)"
+            let addr = UInt64(UInt(bitPattern: ptr))
+            hits.append(String(format: "%@=0x%llx in %@", sym, addr, owner))
+        }
+        return hits
+    }
+
+    private func imageOwner(of pointer: UnsafeMutableRawPointer) -> String? {
+        var info = Dl_info()
+        let rc = dladdr(pointer, &info)
+        guard rc != 0 else { return nil }
+        if let fname = info.dli_fname {
+            return String(cString: fname)
+        }
+        return nil
     }
 
     private func renderInterviewBank() -> String {
@@ -437,7 +941,76 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         - 先复现：按钮触发 + 日志可见
         - 再观察：LLDB / Debug navigator / Instruments
         - 最后追源码：Runtime / dyld / CFRunLoop
+
+        7. 启动/首帧性能（dyld）
+        - 考点：imageCount、load commands、rebase/bind、lazy vs non-lazy
+        - 实操：点击 “Snapshot dyld Workload” / “Benchmark dlopen (Lazy vs Now)”
+        - 追问：为什么加库会变慢、为什么首次调用某些符号会卡一下
+
+        8. 安全与签名
+        - 考点：LC_CODE_SIGNATURE、段权限（r-x / r-w）、__DATA_CONST 意义
+        - 实操：点击 “Inspect Code Signature & VM Protections”
+        - 追问：代码签名如何保证完整性、为什么 __TEXT 不能写
         """
+    }
+
+    private func mainMachO64() -> (index: UInt32, header: UnsafePointer<mach_header_64>, slide: Int, path: String)? {
+        guard let executablePath = Bundle.main.executablePath else { return nil }
+        let executableName = URL(fileURLWithPath: executablePath).lastPathComponent
+
+        let imageCount = _dyld_image_count()
+        for index in 0..<imageCount {
+            guard let cName = _dyld_get_image_name(index) else { continue }
+            let path = String(cString: cName)
+            if path == executablePath || path.hasSuffix("/\(executableName)") {
+                guard let headerPointer = _dyld_get_image_header(index) else { continue }
+                let magic = headerPointer.pointee.magic
+                guard magic == MH_MAGIC_64 || magic == MH_CIGAM_64 else { return nil }
+                let header = UnsafeRawPointer(headerPointer).assumingMemoryBound(to: mach_header_64.self)
+                let slide = _dyld_get_image_vmaddr_slide(index)
+                return (index, header, slide, path)
+            }
+        }
+
+        return nil
+    }
+
+    private func vmProtString(_ prot: vm_prot_t) -> String {
+        var parts: [String] = []
+        parts.append((prot & VM_PROT_READ) != 0 ? "r" : "-")
+        parts.append((prot & VM_PROT_WRITE) != 0 ? "w" : "-")
+        parts.append((prot & VM_PROT_EXECUTE) != 0 ? "x" : "-")
+        return parts.joined()
+    }
+
+    private func vmRegionInfo(at address: UInt64) -> (protection: vm_prot_t, maxProtection: vm_prot_t, regionSize: UInt64)? {
+        var addr = vm_address_t(address)
+        var size: vm_size_t = 0
+        var info = vm_region_basic_info_64()
+        var count = mach_msg_type_number_t(MemoryLayout<vm_region_basic_info_64>.stride / MemoryLayout<natural_t>.stride)
+        var objectName: mach_port_t = 0
+
+        let kr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
+            infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
+                vm_region_64(mach_task_self_, &addr, &size, VM_REGION_BASIC_INFO_64, intPtr, &count, &objectName)
+            }
+        }
+
+        guard kr == KERN_SUCCESS else { return nil }
+        return (info.protection, info.max_protection, UInt64(size))
+    }
+
+    private func clockNow() -> UInt64 {
+        mach_absolute_time()
+    }
+
+    private func clockElapsedMS(since start: UInt64) -> Double {
+        var timebase = mach_timebase_info_data_t()
+        mach_timebase_info(&timebase)
+        let end = mach_absolute_time()
+        let elapsed = end &- start
+        let nanos = Double(elapsed) * Double(timebase.numer) / Double(timebase.denom)
+        return nanos / 1_000_000.0
     }
 
     private func fixedWidthString<T>(from value: T) -> String {
@@ -445,6 +1018,21 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
             let prefix = rawBuffer.prefix { $0 != 0 }
             return String(decoding: prefix, as: UTF8.self)
         }
+    }
+
+    private func fetchObjCLoadLogs() -> String {
+        guard let cls = NSClassFromString("LFForwardingEntry") as AnyObject? else {
+            return "  (LFForwardingEntry not found)"
+        }
+        let sel = NSSelectorFromString("loadLogSnapshot")
+        guard cls.responds(to: sel) else {
+            return "  (loadLogSnapshot not available)"
+        }
+        let value = cls.perform(sel)?.takeUnretainedValue() as? String
+        if let value, !value.isEmpty {
+            return value.split(separator: "\n").map { "  \($0)" }.joined(separator: "\n")
+        }
+        return "  (empty)"
     }
 
     private func formatHex<T: BinaryInteger>(_ value: T) -> String {

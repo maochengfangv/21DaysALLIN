@@ -1,8 +1,34 @@
 #import <Foundation/Foundation.h>
+#import <mach/mach_time.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 
 static NSMutableArray<NSString *> *LFRuntimeLogs;
+static NSMutableArray<NSString *> *LFLoadLogs;
+static uint64_t LFLoadStartAbs;
+static mach_timebase_info_data_t LFLoadTimebase;
+
+static double LFLoadNowMS(void) {
+    if (LFLoadStartAbs == 0) {
+        LFLoadStartAbs = mach_absolute_time();
+        mach_timebase_info(&LFLoadTimebase);
+    }
+    uint64_t now = mach_absolute_time();
+    uint64_t elapsed = now - LFLoadStartAbs;
+    double nanos = (double)elapsed * (double)LFLoadTimebase.numer / (double)LFLoadTimebase.denom;
+    return nanos / 1e6;
+}
+
+static void LFLoadResetLogs(void) {
+    LFLoadLogs = [NSMutableArray array];
+}
+
+static void LFLoadLog(NSString *message) {
+    if (LFLoadLogs == nil) {
+        LFLoadResetLogs();
+    }
+    [LFLoadLogs addObject:message];
+}
 
 static void LFResetLogs(void) {
     LFRuntimeLogs = [NSMutableArray array];
@@ -88,6 +114,7 @@ static id LFDynamicGreeting(id self, SEL _cmd) {
 
 @interface LFForwardingEntry : NSObject
 - (NSString *)runDemo;
++ (NSString *)loadLogSnapshot;
 @end
 
 @implementation LFForwardingEntry
@@ -117,4 +144,38 @@ static id LFDynamicGreeting(id self, SEL _cmd) {
     return [lines componentsJoinedByString:@"\n"];
 }
 
++ (NSString *)loadLogSnapshot {
+    if (LFLoadLogs == nil) {
+        return @"(+load) logs not available";
+    }
+    return [LFLoadLogs componentsJoinedByString:@"\n"];
+}
+
+@end
+
+@interface LFLoadDemoA : NSObject
+@end
+
+@implementation LFLoadDemoA
++ (void)load {
+    LFLoadLog([NSString stringWithFormat:@"%.3f ms +load %@ main=%@", LFLoadNowMS(), NSStringFromClass(self), [NSThread isMainThread] ? @"YES" : @"NO"]);
+}
+@end
+
+@interface LFLoadDemoB : NSObject
+@end
+
+@implementation LFLoadDemoB
++ (void)load {
+    LFLoadLog([NSString stringWithFormat:@"%.3f ms +load %@ main=%@", LFLoadNowMS(), NSStringFromClass(self), [NSThread isMainThread] ? @"YES" : @"NO"]);
+}
+@end
+
+@interface LFLoadDemoC : NSObject
+@end
+
+@implementation LFLoadDemoC
++ (void)load {
+    LFLoadLog([NSString stringWithFormat:@"%.3f ms +load %@ main=%@", LFLoadNowMS(), NSStringFromClass(self), [NSThread isMainThread] ? @"YES" : @"NO"]);
+}
 @end
