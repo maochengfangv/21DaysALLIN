@@ -88,7 +88,10 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
     private let perfTitleLabel = UILabel()
     private let perfSnapshotButton = UIButton(type: .system)
     private let perfBenchmarkButton = UIButton(type: .system)
+    private let perfCopyJSONButton = UIButton(type: .system)
     private let perfTextView = UITextView()
+
+    private var lastPerfReportJSON: String = ""
 
     private let securityTitleLabel = UILabel()
     private let securityModeControl = UISegmentedControl(items: ["Real", "Demo"])
@@ -210,6 +213,8 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         perfSnapshotButton.addTarget(self, action: #selector(onPerfSnapshot), for: .touchUpInside)
         perfBenchmarkButton.setTitle("Benchmark dlopen (Lazy vs Now)", for: .normal)
         perfBenchmarkButton.addTarget(self, action: #selector(onPerfBenchmark), for: .touchUpInside)
+        perfCopyJSONButton.setTitle("Copy JSON", for: .normal)
+        perfCopyJSONButton.addTarget(self, action: #selector(onPerfCopyJSON), for: .touchUpInside)
         configureTextView(perfTextView, height: 240)
 
         securityTitleLabel.font = .preferredFont(forTextStyle: .headline)
@@ -231,7 +236,7 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         runLoopButtons.spacing = 12
         runLoopButtons.distribution = .fillEqually
 
-        let perfButtons = UIStackView(arrangedSubviews: [perfSnapshotButton, perfBenchmarkButton])
+        let perfButtons = UIStackView(arrangedSubviews: [perfSnapshotButton, perfBenchmarkButton, perfCopyJSONButton])
         perfButtons.axis = .horizontal
         perfButtons.spacing = 12
         perfButtons.distribution = .fillEqually
@@ -325,7 +330,7 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
         renderRunLoopStatus()
         runLoopLogTextView.text = "点击 Start RunLoop Demo 后，水平拖动上方区域。\n预期：Default timer 在 tracking 期间暂停，Common timer 继续增长。"
         interviewTextView.text = renderInterviewBank()
-        perfTextView.text = "点击 Snapshot 观察 dyld image 数量与主二进制 load commands 概览。\n点击 Benchmark 比较 dlopen 的 Lazy/Now（演示 dyld 绑定策略对启动/首次调用的影响）。"
+        perfTextView.text = "点击 Snapshot 观察 dyld image 数量与主二进制 load commands 概览。\n点击 Benchmark 比较 dlopen 的 Lazy/Now（演示 dyld 绑定策略对启动/首次调用的影响）。\n点击 Copy JSON 复制结构化报告（type/timestamp/text）。"
         securityTextView.text = "选择 Real/Demo 后点击 Inspect 输出：LC_CODE_SIGNATURE/段权限/VM protections + 越狱检测证据与评分。\n点击 Copy JSON 可复制结构化报告。"
     }
 
@@ -351,11 +356,36 @@ final class ViewController: UIViewController, UIScrollViewDelegate {
     }
 
     @objc private func onPerfSnapshot() {
-        perfTextView.text = renderDyldWorkloadSnapshot()
+        let text = renderDyldWorkloadSnapshot()
+        lastPerfReportJSON = makePerfReportJSON(type: "dyld_snapshot", text: text)
+        perfTextView.text = text
     }
 
     @objc private func onPerfBenchmark() {
-        perfTextView.text = renderDlopenBenchmark()
+        let text = renderDlopenBenchmark()
+        lastPerfReportJSON = makePerfReportJSON(type: "dlopen_benchmark", text: text)
+        perfTextView.text = text
+    }
+
+    @objc private func onPerfCopyJSON() {
+        if lastPerfReportJSON.isEmpty {
+            let text = renderDyldWorkloadSnapshot()
+            lastPerfReportJSON = makePerfReportJSON(type: "dyld_snapshot", text: text)
+        }
+        UIPasteboard.general.string = lastPerfReportJSON
+    }
+
+    private func makePerfReportJSON(type: String, text: String) -> String {
+        let dict: [String: Any] = [
+            "type": type,
+            "timestamp": Date().timeIntervalSince1970,
+            "text": text
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: data, encoding: .utf8) {
+            return s
+        }
+        return "{}"
     }
 
     @objc private func onSecurityModeChanged() {
