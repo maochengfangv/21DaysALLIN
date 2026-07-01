@@ -90,7 +90,7 @@ final class ViewController: UIViewController {
 
     @objc private func onConfigBurst() {
         burst(tag: "config", count: 8) { done in
-            self.repo.fetchConfig(userId: "u1", anonId: nil, locale: "zh-Hans", region: "CN", scene: "home", completion: done)
+            self.repo.fetchConfig(userId: "u1", anonId: nil as String?, locale: "zh-Hans", region: "CN", scene: "home", completion: done)
         }
     }
 
@@ -137,7 +137,7 @@ final class ViewController: UIViewController {
 
     private func render(_ line: String) {
         let m = repo.snapshot()
-        let header = "sf=\(repo.enableSingleFlight) origin=\(m.origin) coalesced=\(m.coalesced) inflightMax=\(m.inflightMax) ok=\(m.ok) fail=\(m.fail) timeout=\(m.timeout) dropW=\(m.dropTooManyWaiters) dropI=\(m.dropTooManyInflight) cancel=\(m.canceled) waitP95=\(m.waitP95ms)ms waitP99=\(m.waitP99ms)ms"
+        let header = "sf=\(repo.enableSingleFlight) origin=\(m.origin) coalesced=\(m.coalesced) stale=\(m.stale) bypass=\(m.bypass) reject=\(m.rejected) timeout=\(m.timeout) inflightMax=\(m.inflightMax) ok=\(m.ok) fail=\(m.fail) waitP95=\(m.waitP95ms)ms waitP99=\(m.waitP99ms)ms"
         logs.append(line)
         if logs.count > 18 { logs.removeFirst(logs.count - 18) }
         logView.text = ([header] + logs).joined(separator: "\n")
@@ -156,341 +156,199 @@ private final class DemoMetrics {
 
     private(set) var origin: Int = 0
     private(set) var coalesced: Int = 0
+    private(set) var stale: Int = 0
+    private(set) var bypass: Int = 0
+    private(set) var rejected: Int = 0
+    private(set) var timeout: Int = 0
     private(set) var inflightMax: Int = 0
     private(set) var ok: Int = 0
     private(set) var fail: Int = 0
-    private(set) var timeout: Int = 0
-    private(set) var dropTooManyWaiters: Int = 0
-    private(set) var dropTooManyInflight: Int = 0
-    private(set) var canceled: Int = 0
-
     private var waitSamplesMs: [Int] = []
 
-    func onStart(inflight: Int) {
+    func onStart(inflight: Int) { lock.lock(); defer { lock.unlock() }; origin += 1; inflightMax = max(inflightMax, inflight) }
+    func onJoin() { lock.lock(); defer { lock.unlock() }; coalesced += 1 }
+    func onStale() { lock.lock(); defer { lock.unlock() }; stale += 1 }
+    func onBypass() { lock.lock(); defer { lock.unlock() }; bypass += 1 }
+    func onRejected() { lock.lock(); defer { lock.unlock() }; rejected += 1 }
+    func onTimeout() { lock.lock(); defer { lock.unlock() }; timeout += 1 }
+    func onFinish(_ event: SingleFlightEvent) {
         lock.lock(); defer { lock.unlock() }
-        origin += 1
-        inflightMax = max(inflightMax, inflight)
-    }
-
-    func onJoin() {
-        lock.lock(); defer { lock.unlock() }
-        coalesced += 1
-    }
-
-    func onDrop(_ reason: SingleFlightDropReason) {
-        lock.lock(); defer { lock.unlock() }
-        switch reason {
-        case .tooManyWaiters:
-            dropTooManyWaiters += 1
-        case .tooManyInflight:
-            dropTooManyInflight += 1
-        case .canceled:
-            canceled += 1
-        }
-    }
-
-    func onFinish(_ event: SingleFlightEvent, outcome: SingleFlightOutcome) {
-        lock.lock(); defer { lock.unlock() }
-        switch outcome {
-        case .success:
-            ok += 1
-        case .failure:
-            fail += 1
-        case .timeout:
-            fail += 1
-            timeout += 1
-        }
+        if event.ok { ok += 1 } else { fail += 1 }
         waitSamplesMs.append(event.waitMs)
         if waitSamplesMs.count > 400 { waitSamplesMs.removeFirst(waitSamplesMs.count - 400) }
     }
-
+    func reset() { lock.lock(); defer { lock.unlock() }; origin = 0; coalesced = 0; stale = 0; bypass = 0; rejected = 0; timeout = 0; inflightMax = 0; ok = 0; fail = 0; waitSamplesMs.removeAll() }
     func snapshot() -> DemoMetricsSnapshot {
         lock.lock(); defer { lock.unlock() }
-        let p95 = percentile(waitSamplesMs, 0.95)
-        let p99 = percentile(waitSamplesMs, 0.99)
-        return DemoMetricsSnapshot(origin: origin,
-                                  coalesced: coalesced,
-                                  inflightMax: inflightMax,
-                                  ok: ok,
-                                  fail: fail,
-                                  timeout: timeout,
-                                  dropTooManyWaiters: dropTooManyWaiters,
-                                  dropTooManyInflight: dropTooManyInflight,
-                                  canceled: canceled,
-                                  waitP95ms: p95,
-                                  waitP99ms: p99)
+        return DemoMetricsSnapshot(origin: origin, coalesced: coalesced, stale: stale, bypass: bypass, rejected: rejected, timeout: timeout, inflightMax: inflightMax, ok: ok, fail: fail, waitP95ms: percentile(waitSamplesMs, 0.95), waitP99ms: percentile(waitSamplesMs, 0.99))
     }
-
-    private func percentile(_ xs: [Int], _ p: Double) -> Int {
-        guard !xs.isEmpty else { return 0 }
-        let s = xs.sorted()
-        let idx = min(max(Int(Double(s.count - 1) * p), 0), s.count - 1)
-        return s[idx]
-    }
+    private func percentile(_ xs: [Int], _ p: Double) -> Int { guard !xs.isEmpty else { return 0 }; let s = xs.sorted(); return s[min(max(Int(Double(s.count - 1) * p), 0), s.count - 1)] }
 }
 
 private struct DemoMetricsSnapshot {
     let origin: Int
     let coalesced: Int
+    let stale: Int
+    let bypass: Int
+    let rejected: Int
+    let timeout: Int
     let inflightMax: Int
     let ok: Int
     let fail: Int
-    let timeout: Int
-    let dropTooManyWaiters: Int
-    let dropTooManyInflight: Int
-    let canceled: Int
     let waitP95ms: Int
     let waitP99ms: Int
-}
-
-private enum SingleFlightError: Error {
-    case timeout
-    case tooManyWaiters
-    case tooManyInflight
-}
-
-private enum SingleFlightDropReason {
-    case tooManyWaiters
-    case tooManyInflight
-    case canceled
-}
-
-private enum SingleFlightOutcome {
-    case success
-    case failure
-    case timeout
-}
-
-private struct SingleFlightOptions {
-    var timeoutMs: Int
-    var maxWaitersPerKey: Int
-    var maxInflightKeys: Int
-
-    static let `default` = SingleFlightOptions(timeoutMs: 1500, maxWaitersPerKey: 64, maxInflightKeys: 256)
 }
 
 private protocol SingleFlightObserver: AnyObject {
     func onStart(key: String, inflight: Int)
     func onJoin(key: String)
-    func onDrop(key: String, reason: SingleFlightDropReason)
-    func onFinish(key: String, waiters: Int, waitMs: Int, outcome: SingleFlightOutcome)
+    func onFinish(key: String, waiters: Int, waitMs: Int, result: Result<String, Error>)
+    func onStale(key: String)
+    func onBypass(key: String, reason: String)
+    func onRejectJoin(key: String, maxWaiters: Int)
+    func onTimeout(key: String)
 }
 
 private final class MetricsObserver: SingleFlightObserver {
     private let metrics: DemoMetrics
-
-    init(metrics: DemoMetrics) {
-        self.metrics = metrics
-    }
-
-    func onStart(key: String, inflight: Int) {
-        metrics.onStart(inflight: inflight)
-    }
-
-    func onJoin(key: String) {
-        metrics.onJoin()
-    }
-
-    func onDrop(key: String, reason: SingleFlightDropReason) {
-        metrics.onDrop(reason)
-    }
-
-    func onFinish(key: String, waiters: Int, waitMs: Int, outcome: SingleFlightOutcome) {
-        let ok = (outcome == .success)
-        metrics.onFinish(SingleFlightEvent(key: key, waiters: waiters, waitMs: waitMs, ok: ok), outcome: outcome)
+    init(metrics: DemoMetrics) { self.metrics = metrics }
+    func onStart(key: String, inflight: Int) { metrics.onStart(inflight: inflight) }
+    func onJoin(key: String) { metrics.onJoin() }
+    func onStale(key: String) { metrics.onStale() }
+    func onBypass(key: String, reason: String) { metrics.onBypass() }
+    func onRejectJoin(key: String, maxWaiters: Int) { metrics.onRejected() }
+    func onTimeout(key: String) { metrics.onTimeout() }
+    func onFinish(key: String, waiters: Int, waitMs: Int, result: Result<String, Error>) {
+        let ok: Bool
+        switch result {
+        case .success: ok = true
+        case .failure: ok = false
+        }
+        metrics.onFinish(SingleFlightEvent(key: key, waiters: waiters, waitMs: waitMs, ok: ok))
     }
 }
 
-private final class SingleFlightTask {
-    private let lock = NSLock()
-    private var onCancel: (() -> Void)?
+private enum RequestEffect: Equatable { case readOnly, idempotentSideEffect, nonMergeableSideEffect }
+private enum FailureStrategy: Equatable { case broadcastSharedFailure, retryJoinersIndividually }
 
-    init(onCancel: @escaping () -> Void) {
-        self.onCancel = onCancel
+private struct SingleFlightPolicy {
+    let effect: RequestEffect
+    let timeoutMs: Int
+    let maxWaiters: Int
+    let failureStrategy: FailureStrategy
+    let staleWhileRevalidate: Bool
+}
+
+private enum SingleFlightError: LocalizedError {
+    case timedOut(String)
+    case tooManyWaiters(String, Int)
+    var errorDescription: String? {
+        switch self {
+        case .timedOut(let key): return "singleflight timeout: \(key)"
+        case .tooManyWaiters(let key, let max): return "singleflight rejected: \(key), max=\(max)"
+        }
     }
-
-    func cancel() {
-        lock.lock(); defer { lock.unlock() }
-        guard let c = onCancel else { return }
-        onCancel = nil
-        c()
-    }
-
-    static let noop = SingleFlightTask(onCancel: {})
 }
 
 private final class SingleFlight<Value> {
-    private final class Entry {
+    private struct Entry {
         let startedAt: CFAbsoluteTime
-        var callbacks: [UUID: (Result<Value, Error>) -> Void]
-        var timer: DispatchSourceTimer?
-        var finished = false
-
-        init(startedAt: CFAbsoluteTime, callbacks: [UUID: @escaping (Result<Value, Error>) -> Void]) {
-            self.startedAt = startedAt
-            self.callbacks = callbacks
-        }
+        let start: (@escaping (Result<Value, Error>) -> Void) -> Void
+        let policy: SingleFlightPolicy
+        var callbacks: [(Result<Value, Error>) -> Void]
+        var timeoutWorkItem: DispatchWorkItem?
     }
 
     private let lock = NSLock()
     private var inflight: [String: Entry] = [:]
 
-    func run(key: String,
-             options: SingleFlightOptions = .default,
-             start: (@escaping (Result<Value, Error>) -> Void) -> Void,
-             completion: @escaping (Result<Value, Error>) -> Void,
-             observer: SingleFlightObserver? = nil) -> SingleFlightTask {
-        let id = UUID()
-
+    func run(key: String, policy: SingleFlightPolicy, start: @escaping (@escaping (Result<Value, Error>) -> Void) -> Void, completion: @escaping (Result<Value, Error>) -> Void, observer: SingleFlightObserver? = nil) {
+        if policy.effect == .nonMergeableSideEffect { observer?.onBypass(key: key, reason: "non-mergeable-side-effect"); start(completion); return }
         lock.lock()
-        if let e = inflight[key] {
-            if e.callbacks.count >= options.maxWaitersPerKey {
+        if var entry = inflight[key] {
+            if entry.callbacks.count >= policy.maxWaiters {
                 lock.unlock()
-                observer?.onDrop(key: key, reason: .tooManyWaiters)
-                completion(.failure(SingleFlightError.tooManyWaiters))
-                return .noop
+                observer?.onRejectJoin(key: key, maxWaiters: policy.maxWaiters)
+                completion(.failure(SingleFlightError.tooManyWaiters(key, policy.maxWaiters)))
+                return
             }
-            e.callbacks[id] = completion
+            entry.callbacks.append(completion)
+            inflight[key] = entry
             lock.unlock()
             observer?.onJoin(key: key)
-            return SingleFlightTask { [weak self] in
-                self?.cancelCallback(key: key, id: id, observer: observer)
-            }
+            return
         }
-
-        if inflight.count >= options.maxInflightKeys {
-            lock.unlock()
-            observer?.onDrop(key: key, reason: .tooManyInflight)
-            completion(.failure(SingleFlightError.tooManyInflight))
-            return .noop
-        }
-
-        let entry = Entry(startedAt: CFAbsoluteTimeGetCurrent(), callbacks: [id: completion])
-        inflight[key] = entry
+        inflight[key] = Entry(startedAt: CFAbsoluteTimeGetCurrent(), start: start, policy: policy, callbacks: [completion], timeoutWorkItem: nil)
         let inflightCount = inflight.count
         lock.unlock()
         observer?.onStart(key: key, inflight: inflightCount)
-
-        if options.timeoutMs > 0 {
-            let t = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
-            t.schedule(deadline: .now() + .milliseconds(options.timeoutMs))
-            t.setEventHandler { [weak self] in
-                self?.finish(key: key, result: .failure(SingleFlightError.timeout), observer: observer)
-            }
-            lock.lock(); entry.timer = t; lock.unlock()
-            t.resume()
-        }
-
-        start { [weak self] result in
-            self?.finish(key: key, result: result, observer: observer)
-        }
-
-        return SingleFlightTask { [weak self] in
-            self?.cancelCallback(key: key, id: id, observer: observer)
-        }
+        installTimeoutIfNeeded(key: key, policy: policy, observer: observer)
+        start { [weak self] result in self?.finish(key: key, result: result, observer: observer) }
     }
 
-    private func cancelCallback(key: String, id: UUID, observer: SingleFlightObserver?) {
-        lock.lock()
-        guard let e = inflight[key] else {
-            lock.unlock()
-            return
-        }
-        let removed = e.callbacks.removeValue(forKey: id) != nil
-        let shouldDropEntry = e.callbacks.isEmpty && !e.finished
-        if shouldDropEntry {
-            e.finished = true
-            inflight.removeValue(forKey: key)
-        }
-        let timer = shouldDropEntry ? e.timer : nil
-        lock.unlock()
+    func clear() { lock.lock(); defer { lock.unlock() }; inflight.values.forEach { $0.timeoutWorkItem?.cancel() }; inflight.removeAll() }
 
-        if removed { observer?.onDrop(key: key, reason: .canceled) }
-        timer?.cancel()
+    private func installTimeoutIfNeeded(key: String, policy: SingleFlightPolicy, observer: SingleFlightObserver?) {
+        guard policy.timeoutMs > 0 else { return }
+        let item = DispatchWorkItem { [weak self] in self?.timeout(key: key, observer: observer) }
+        lock.lock(); if var entry = inflight[key] { entry.timeoutWorkItem = item; inflight[key] = entry }; lock.unlock()
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + .milliseconds(policy.timeoutMs), execute: item)
+    }
+
+    private func timeout(key: String, observer: SingleFlightObserver?) {
+        lock.lock(); let entry = inflight.removeValue(forKey: key); lock.unlock()
+        guard let entry else { return }
+        observer?.onTimeout(key: key)
+        entry.callbacks.forEach { $0(.failure(SingleFlightError.timedOut(key))) }
     }
 
     private func finish(key: String, result: Result<Value, Error>, observer: SingleFlightObserver?) {
-        let callbacks: [ (Result<Value, Error>) -> Void ]
-        let waiters: Int
-        let waitMs: Int
-        let outcome: SingleFlightOutcome
-
-        lock.lock()
-        guard let e = inflight[key], !e.finished else {
-            lock.unlock()
-            return
-        }
-        e.finished = true
-        inflight.removeValue(forKey: key)
-        callbacks = Array(e.callbacks.values)
-        waiters = callbacks.count
-        waitMs = Int(((CFAbsoluteTimeGetCurrent() - e.startedAt) * 1000.0).rounded())
-        let timer = e.timer
-        lock.unlock()
-
-        timer?.cancel()
-        callbacks.forEach { $0(result) }
-
+        lock.lock(); let entry = inflight.removeValue(forKey: key); lock.unlock()
+        guard let entry else { return }
+        entry.timeoutWorkItem?.cancel()
+        let waitMs = Int(((CFAbsoluteTimeGetCurrent() - entry.startedAt) * 1000).rounded())
         switch result {
-        case .success:
-            outcome = .success
-        case .failure(let err):
-            if err is SingleFlightError, (err as? SingleFlightError) == .timeout {
-                outcome = .timeout
-            } else {
-                outcome = .failure
-            }
+        case .failure where entry.policy.failureStrategy == .retryJoinersIndividually && entry.callbacks.count > 1:
+            entry.callbacks.first?(result)
+            entry.callbacks.dropFirst().forEach { cb in observer?.onBypass(key: key, reason: "retry-after-shared-failure"); entry.start(cb) }
+        default:
+            entry.callbacks.forEach { $0(result) }
         }
-        observer?.onFinish(key: key, waiters: waiters, waitMs: waitMs, outcome: outcome)
-    }
-
-    func clear() {
-        lock.lock(); defer { lock.unlock() }
-        inflight.values.forEach { $0.timer?.cancel() }
-        inflight.removeAll()
+        let normalized: Result<String, Error>
+        switch result {
+        case .success: normalized = .success("ok")
+        case .failure(let err): normalized = .failure(err)
+        }
+        observer?.onFinish(key: key, waiters: entry.callbacks.count, waitMs: waitMs, result: normalized)
     }
 }
 
 private enum SFKey {
-    static func tokenRefresh(userId: String, authScope: String, env: String) -> String {
-        "refresh:\(userId):\(authScope):\(env)"
-    }
-
-    static func me(userId: String, authScope: String, locale: String, appVersion: String) -> String {
-        "me:\(userId):\(authScope):\(locale):\(appVersion)"
-    }
-
-    static func config(userIdOrAnon: String, deviceId: String, locale: String, region: String, appVersion: String, scene: String, env: String) -> String {
-        "config:\(userIdOrAnon):\(deviceId):\(locale):\(region):\(appVersion):\(scene):\(env)"
-    }
-
-    static func item(resourceId: String, userIdOrAnon: String, locale: String, region: String, fieldsMask: String) -> String {
-        "item:\(resourceId):\(userIdOrAnon):\(locale):\(region):\(fieldsMask)"
-    }
-
-    static func mediaMeta(mediaId: String, variant: String, userIdOrAnon: String, authScope: String, locale: String) -> String {
-        "mediaMeta:\(mediaId):\(variant):\(userIdOrAnon):\(authScope):\(locale)"
-    }
-
-    static func cacheFill(logicalKey: String, userIdOrAnon: String, locale: String, region: String, appVersion: String) -> String {
-        "cacheFill:\(logicalKey):\(userIdOrAnon):\(locale):\(region):\(appVersion)"
-    }
-
-    static func dbRead(table: String, primaryKey: String, projection: String) -> String {
-        "dbRead:\(table):\(primaryKey):\(projection)"
+    static func tokenRefresh(userId: String, authScope: String, appId: String, env: String, tokenFamily: String) -> String { "refresh:\(userId):\(authScope):\(appId):\(env):\(tokenFamily)" }
+    static func me(userId: String, authScope: String, locale: String, appVersion: String, schemaVersion: String) -> String { "me:\(userId):\(authScope):\(locale):\(appVersion):\(schemaVersion)" }
+    static func config(userIdOrAnon: String, deviceId: String, locale: String, region: String, appVersion: String, channel: String, experimentNamespace: String, env: String, bucketingId: String) -> String { "config:\(userIdOrAnon):\(deviceId):\(locale):\(region):\(appVersion):\(channel):\(experimentNamespace):\(env):\(bucketingId)" }
+    static func item(resourceId: String, userIdOrAnon: String, locale: String, region: String, fieldsMask: String, appVersion: String) -> String { "item:\(resourceId):\(userIdOrAnon):\(locale):\(region):\(fieldsMask):\(appVersion)" }
+    static func mediaMeta(mediaId: String, variant: String, cdnHost: String, locale: String, authScope: String, userIdOrAnon: String) -> String { "mediaMeta:\(mediaId):\(variant):\(cdnHost):\(locale):\(authScope):\(userIdOrAnon)" }
+    static func cacheFill(logicalCacheKey: String, userIdOrAnon: String, locale: String, region: String, appVersion: String) -> String { "cacheFill:\(logicalCacheKey):\(userIdOrAnon):\(locale):\(region):\(appVersion)" }
+    static func dbRead(table: String, primaryKey: String, projection: String, userId: String?) -> String {
+        let normalizedUserId = userId ?? "anon"
+        return "dbRead:\(table):\(primaryKey):\(projection):\(normalizedUserId)"
     }
 }
 
 private final class TTLCache {
     private let lock = NSLock()
-    private var map: [String: (String, Date)] = [:]
+    private var map: [String: (value: String, expireAt: Date)] = [:]
 
-    func get(_ key: String) -> String? {
+    func getFresh(_ key: String) -> String? {
         lock.lock(); defer { lock.unlock() }
         guard let v = map[key] else { return nil }
-        if v.1 > Date() { return v.0 }
-        map.removeValue(forKey: key)
-        return nil
+        return v.expireAt > Date() ? v.value : nil
+    }
+
+    func getStale(_ key: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return map[key]?.value
     }
 
     func set(_ key: String, value: String, ttlSeconds: TimeInterval) {
@@ -498,15 +356,13 @@ private final class TTLCache {
         map[key] = (value, Date().addingTimeInterval(ttlSeconds))
     }
 
-    func expire(_ key: String) {
+    func expire(_ key: String, keepStale: Bool = true) {
         lock.lock(); defer { lock.unlock() }
-        map.removeValue(forKey: key)
+        guard keepStale, let value = map[key]?.value else { map.removeValue(forKey: key); return }
+        map[key] = (value, .distantPast)
     }
 
-    func clear() {
-        lock.lock(); defer { lock.unlock() }
-        map.removeAll()
-    }
+    func clear() { lock.lock(); defer { lock.unlock() }; map.removeAll() }
 }
 
 private enum DemoError: Error {
@@ -535,103 +391,120 @@ private final class DemoRepository {
     private let backend = FakeBackend()
     private let cache = TTLCache()
     private let sf = SingleFlight<String>()
-
     private let metrics = DemoMetrics()
     private lazy var observer: SingleFlightObserver = MetricsObserver(metrics: metrics)
 
+    private let refreshPolicy = SingleFlightPolicy(effect: .idempotentSideEffect, timeoutMs: 1500, maxWaiters: 12, failureStrategy: .broadcastSharedFailure, staleWhileRevalidate: false)
+    private let profilePolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 1200, maxWaiters: 24, failureStrategy: .broadcastSharedFailure, staleWhileRevalidate: false)
+    private let configPolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 1200, maxWaiters: 24, failureStrategy: .broadcastSharedFailure, staleWhileRevalidate: true)
+    private let itemPolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 1200, maxWaiters: 48, failureStrategy: .retryJoinersIndividually, staleWhileRevalidate: false)
+    private let mediaPolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 1000, maxWaiters: 48, failureStrategy: .broadcastSharedFailure, staleWhileRevalidate: false)
+    private let cachePolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 1200, maxWaiters: 48, failureStrategy: .broadcastSharedFailure, staleWhileRevalidate: true)
+    private let dbPolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 900, maxWaiters: 16, failureStrategy: .retryJoinersIndividually, staleWhileRevalidate: false)
+
     func snapshot() -> DemoMetricsSnapshot { metrics.snapshot() }
+    func reset() { metrics.reset(); cache.clear(); sf.clear() }
+
+    private func run(key: String, policy: SingleFlightPolicy, start: @escaping (@escaping (Result<String, Error>) -> Void) -> Void, completion: @escaping (Result<String, Error>) -> Void) {
+        if enableSingleFlight { sf.run(key: key, policy: policy, start: start, completion: completion, observer: observer) }
+        else { observer.onBypass(key: key, reason: "singleflight-disabled"); start(completion) }
+    }
+
+    private func revalidate(key: String, policy: SingleFlightPolicy, start: @escaping (@escaping (Result<String, Error>) -> Void) -> Void) {
+        run(key: key, policy: policy, start: start) { _ in }
+    }
+
+    private func serveFreshOrStale(cacheKey: String, key: String, policy: SingleFlightPolicy, start: @escaping (@escaping (Result<String, Error>) -> Void) -> Void, completion: @escaping (Result<String, Error>) -> Void) {
+        if let fresh = cache.getFresh(cacheKey) { completion(.success("fresh \(fresh)")); return }
+        if policy.staleWhileRevalidate, let stale = cache.getStale(cacheKey) {
+            observer.onStale(key: key)
+            completion(.success("stale \(stale)"))
+            revalidate(key: key, policy: policy, start: start)
+            return
+        }
+        run(key: key, policy: policy, start: start, completion: completion)
+    }
+
+    private func canonicalQuery(_ query: [String: String]) -> String {
+        query.keys.sorted().map { key in
+            let value = query[key] ?? ""
+            return "\(key)=\(value)"
+        }.joined(separator: "&")
+    }
 
     func refreshToken(userId: String, authScope: String, completion: @escaping (Result<String, Error>) -> Void) {
-        let key = SFKey.tokenRefresh(userId: userId, authScope: authScope, env: "prod")
-        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in
-            self.backend.call(path: "POST /auth/refresh", delayMs: 320, completion: done)
-        }
-        run(key: key, start: start, completion: completion)
+        let key = SFKey.tokenRefresh(userId: userId, authScope: authScope, appId: appId, env: env, tokenFamily: "session")
+        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in self.backend.call(path: "POST /auth/refresh", delayMs: 320, completion: done) }
+        run(key: key, policy: refreshPolicy, start: start, completion: completion)
     }
 
     func fetchMe(userId: String, authScope: String, locale: String, completion: @escaping (Result<String, Error>) -> Void) {
-        let key = SFKey.me(userId: userId, authScope: authScope, locale: locale, appVersion: appVersion)
-        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in
-            self.backend.call(path: "GET /me", delayMs: 260, completion: done)
-        }
-        run(key: key, start: start, completion: completion)
+        let key = SFKey.me(userId: userId, authScope: authScope, locale: locale, appVersion: appVersion, schemaVersion: schemaVersion)
+        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in self.backend.call(path: "GET /me", delayMs: 260, completion: done) }
+        run(key: key, policy: profilePolicy, start: start, completion: completion)
     }
 
     func fetchConfig(userId: String?, anonId: String?, locale: String, region: String, scene: String, completion: @escaping (Result<String, Error>) -> Void) {
         let id = userId ?? anonId ?? "anon"
-        let key = SFKey.config(userIdOrAnon: id, deviceId: deviceId, locale: locale, region: region, appVersion: appVersion, scene: scene, env: "prod")
+        let key = SFKey.config(userIdOrAnon: id, deviceId: deviceId, locale: locale, region: region, appVersion: appVersion, channel: channel, experimentNamespace: scene, env: env, bucketingId: id)
+        let cacheKey = "config:\(id):\(scene)"
+        let query = canonicalQuery(["scene": scene])
         let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in
-            self.backend.call(path: "GET /config?scene=\(scene)", delayMs: 220, completion: done)
+            self.backend.call(path: "GET /config?\(query)", delayMs: 220) { result in
+                if case .success(let v) = result { self.cache.set(cacheKey, value: v, ttlSeconds: 12) }
+                done(result)
+            }
         }
-        run(key: key, start: start, completion: completion)
+        serveFreshOrStale(cacheKey: cacheKey, key: key, policy: configPolicy, start: start, completion: completion)
     }
 
     func fetchItemDetail(resourceId: String, userId: String?, locale: String, region: String, fieldsMask: String, completion: @escaping (Result<String, Error>) -> Void) {
         let id = userId ?? "anon"
-        let key = SFKey.item(resourceId: resourceId, userIdOrAnon: id, locale: locale, region: region, fieldsMask: fieldsMask)
-        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in
-            self.backend.call(path: "GET /item/\(resourceId)", delayMs: 280, completion: done)
-        }
-        run(key: key, start: start, completion: completion)
+        let key = SFKey.item(resourceId: resourceId, userIdOrAnon: id, locale: locale, region: region, fieldsMask: fieldsMask, appVersion: appVersion)
+        let query = canonicalQuery(["fields": fieldsMask])
+        let path = "GET /item/\(resourceId)?\(query)"
+        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in self.backend.call(path: path, delayMs: 280, completion: done) }
+        run(key: key, policy: itemPolicy, start: start, completion: completion)
     }
 
     func fetchMediaMeta(mediaId: String, variant: String, userId: String?, authScope: String, locale: String, completion: @escaping (Result<String, Error>) -> Void) {
         let id = userId ?? "anon"
-        let key = SFKey.mediaMeta(mediaId: mediaId, variant: variant, userIdOrAnon: id, authScope: authScope, locale: locale)
-        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in
-            self.backend.call(path: "GET /media/\(mediaId)/meta?variant=\(variant)", delayMs: 240, completion: done)
-        }
-        run(key: key, start: start, completion: completion)
+        let key = SFKey.mediaMeta(mediaId: mediaId, variant: variant, cdnHost: cdnHost, locale: locale, authScope: authScope, userIdOrAnon: id)
+        let query = canonicalQuery(["variant": variant])
+        let path = "GET /media/\(mediaId)/meta?\(query)"
+        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in self.backend.call(path: path, delayMs: 240, completion: done) }
+        run(key: key, policy: mediaPolicy, start: start, completion: completion)
     }
 
     func getOrLoadCache(logicalKey: String, userId: String?, locale: String, region: String, ttlSeconds: TimeInterval, completion: @escaping (Result<String, Error>) -> Void) {
-        if let v = cache.get(logicalKey) {
-            completion(.success("cacheHit \(v)"))
-            return
-        }
-
+        let normalizedKey = "feed:\(locale):\(region):\(logicalKey)"
         let id = userId ?? "anon"
-        let key = SFKey.cacheFill(logicalKey: logicalKey, userIdOrAnon: id, locale: locale, region: region, appVersion: appVersion)
+        let key = SFKey.cacheFill(logicalCacheKey: normalizedKey, userIdOrAnon: id, locale: locale, region: region, appVersion: appVersion)
+        let query = canonicalQuery(["scene": "home"])
+        let path = "GET /feed?\(query)"
         let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in
-            self.backend.call(path: "GET /feed?scene=home", delayMs: 360) { result in
-                switch result {
-                case .success(let v):
-                    self.cache.set(logicalKey, value: v, ttlSeconds: ttlSeconds)
-                    done(.success(v))
-                case .failure(let e):
-                    done(.failure(e))
-                }
+            self.backend.call(path: path, delayMs: 360) { result in
+                if case .success(let v) = result { self.cache.set(normalizedKey, value: v, ttlSeconds: ttlSeconds) }
+                done(result)
             }
         }
-        run(key: key, start: start, completion: completion)
+        serveFreshOrStale(cacheKey: normalizedKey, key: key, policy: cachePolicy, start: start, completion: completion)
     }
 
-    func expireCache(logicalKey: String) {
-        cache.expire(logicalKey)
-    }
+    func expireCache(logicalKey: String) { cache.expire("feed:zh-Hans:CN:\(logicalKey)") }
 
     func dbRead(table: String, primaryKey: String, projection: String, completion: @escaping (Result<String, Error>) -> Void) {
-        let key = SFKey.dbRead(table: table, primaryKey: primaryKey, projection: projection)
-        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in
-            self.backend.io(name: "DB.fetch \(table)[\(primaryKey)]", delayMs: 180, completion: done)
-        }
-        run(key: key, start: start, completion: completion)
+        let key = SFKey.dbRead(table: table, primaryKey: primaryKey, projection: projection, userId: "u1")
+        let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in self.backend.io(name: "DB.fetch \(table)[\(primaryKey)] fields=\(projection)", delayMs: 180, completion: done) }
+        run(key: key, policy: dbPolicy, start: start, completion: completion)
     }
 
-    private func run(key: String, options: SingleFlightOptions = .default, start: (@escaping (Result<String, Error>) -> Void) -> Void, completion: @escaping (Result<String, Error>) -> Void) {
-        if enableSingleFlight {
-            _ = sf.run(key: key, options: options, start: start, completion: completion, observer: observer)
-        } else {
-            start(completion)
-        }
-    }
-
-    private var appVersion: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
-    }
-
-    private var deviceId: String {
-        UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
-    }
+    private var appId: String { Bundle.main.bundleIdentifier ?? "singleflight.demo" }
+    private var appVersion: String { (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0" }
+    private var schemaVersion: String { "v1" }
+    private var channel: String { "appstore" }
+    private var env: String { "prod" }
+    private var cdnHost: String { "img.demo.local" }
+    private var deviceId: String { UIDevice.current.identifierForVendor?.uuidString ?? "unknown" }
 }
 
