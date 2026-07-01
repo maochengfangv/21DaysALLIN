@@ -251,21 +251,48 @@ private enum SingleFlightError: LocalizedError {
 }
 
 private final class SingleFlight<Value> {
+    // SingleFlight（并发合并）：同一个 key 在 inflight 窗口内只允许一次真实回源，其余并发请求加入等待队列复用结果。
+    // 适用：读请求、幂等副作用（如 token refresh）；不适用：不可合并副作用（写接口、扣费等）。
+
     private struct Entry {
+        // startedAt：用于统计等待时延（wait P95/P99），也是定位“单次回源慢”与“等待排队”的关键证据。
         let startedAt: CFAbsoluteTime
+
+        // start：真实回源闭包。finish 时可能用它做 joiner 单独重试（failureStrategy）。
         let start: (@escaping (Result<Value, Error>) -> Void) -> Void
+
+        // policy：该 key 对应的合并/超时/失败传播策略。
         let policy: SingleFlightPolicy
+
+        // callbacks：等待队列。首个请求也会在这里。
         var callbacks: [(Result<Value, Error>) -> Void]
+
+        // timeoutWorkItem：兜底定时器，用于防止 start 永不回调导致 inflight 泄漏（全局“挂死”）。
         var timeoutWorkItem: DispatchWorkItem?
     }
 
+    // inflight 是共享可变状态，必须加锁。
     private let lock = NSLock()
     private var inflight: [String: Entry] = [:]
 
-    func run(key: String, policy: SingleFlightPolicy, start: @escaping (@escaping (Result<Value, Error>) -> Void) -> Void, completion: @escaping (Result<Value, Error>) -> Void, observer: SingleFlightObserver? = nil) {
-        if policy.effect == .nonMergeableSideEffect { observer?.onBypass(key: key, reason: "non-mergeable-side-effect"); start(completion); return }
+    // run：并发合并入口。
+    // 注意：SingleFlight 不负责切线程；completion 的执行队列由 start 的回调队列决定。
+    func run(key: String,
+             policy: SingleFlightPolicy,
+             start: @escaping (@escaping (Result<Value, Error>) -> Void) -> Void,
+             completion: @escaping (Result<Value, Error>) -> Void,
+             observer: SingleFlightObserver? = nil) {
+        // 不可合并副作用：直接绕过 singleflight，避免行为语义被“合并”破坏。
+        if policy.effect == .nonMergeableSideEffect {
+            observer?.onBypass(key: key, reason: "non-mergeable-side-effect")
+            start(completion)
+            return
+        }
+
         lock.lock()
         if var entry = inflight[key] {
+            // join：已有回源在进行，本请求只入队等待。
+            // maxWaiters：防止热点 key 等待队列无限膨胀（内存/延迟/回调风暴）。
             if entry.callbacks.count >= policy.maxWaiters {
                 lock.unlock()
                 observer?.onRejectJoin(key: key, maxWaiters: policy.maxWaiters)
@@ -278,14 +305,22 @@ private final class SingleFlight<Value> {
             observer?.onJoin(key: key)
             return
         }
+
+        // 首个请求：创建 inflight entry 后再执行 start，避免持锁回源。
         inflight[key] = Entry(startedAt: CFAbsoluteTimeGetCurrent(), start: start, policy: policy, callbacks: [completion], timeoutWorkItem: nil)
         let inflightCount = inflight.count
         lock.unlock()
+
         observer?.onStart(key: key, inflight: inflightCount)
         installTimeoutIfNeeded(key: key, policy: policy, observer: observer)
-        start { [weak self] result in self?.finish(key: key, result: result, observer: observer) }
+
+        // 真实回源开始。
+        start { [weak self] result in
+            self?.finish(key: key, result: result, observer: observer)
+        }
     }
 
+    // clear：用于 demo reset/测试；生产中通常仅在登出/环境切换等场景使用。
     func clear() { lock.lock(); defer { lock.unlock() }; inflight.values.forEach { $0.timeoutWorkItem?.cancel() }; inflight.removeAll() }
 
     private func installTimeoutIfNeeded(key: String, policy: SingleFlightPolicy, observer: SingleFlightObserver?) {
@@ -296,6 +331,7 @@ private final class SingleFlight<Value> {
     }
 
     private func timeout(key: String, observer: SingleFlightObserver?) {
+        // 超时兜底：直接清理 inflight 并对所有等待者广播超时，避免后续请求继续挂在旧 entry 上。
         lock.lock(); let entry = inflight.removeValue(forKey: key); lock.unlock()
         guard let entry else { return }
         observer?.onTimeout(key: key)
@@ -303,17 +339,28 @@ private final class SingleFlight<Value> {
     }
 
     private func finish(key: String, result: Result<Value, Error>, observer: SingleFlightObserver?) {
+        // 回源完成：原子 remove inflight[key]。
         lock.lock(); let entry = inflight.removeValue(forKey: key); lock.unlock()
         guard let entry else { return }
+
         entry.timeoutWorkItem?.cancel()
         let waitMs = Int(((CFAbsoluteTimeGetCurrent() - entry.startedAt) * 1000).rounded())
+
+        // 失败传播策略：
+        // - broadcastSharedFailure：所有等待者共享同一个失败（更节省，但可能把偶发失败放大）。
+        // - retryJoinersIndividually：首个请求收到失败，其余等待者改为各自重试（降低失败放大，但会增加 origin）。
         switch result {
         case .failure where entry.policy.failureStrategy == .retryJoinersIndividually && entry.callbacks.count > 1:
             entry.callbacks.first?(result)
-            entry.callbacks.dropFirst().forEach { cb in observer?.onBypass(key: key, reason: "retry-after-shared-failure"); entry.start(cb) }
+            entry.callbacks.dropFirst().forEach { cb in
+                observer?.onBypass(key: key, reason: "retry-after-shared-failure")
+                entry.start(cb)
+            }
         default:
             entry.callbacks.forEach { $0(result) }
         }
+
+        // 指标：这里只做“成功/失败 + 等待时延 + waiters”统计；真实业务可记录 error 分类（401/timeout 等）。
         let normalized: Result<String, Error>
         switch result {
         case .success: normalized = .success("ok")
@@ -386,14 +433,27 @@ private final class FakeBackend {
 }
 
 private final class DemoRepository {
+    // DemoRepository：把“7 个必用场景”的 key 设计、SingleFlight 策略、缓存/SWR、可观测统一收口到一处，避免 ViewController 里堆业务细节。
+    // enableSingleFlight 用来模拟线上开关（灰度/降级）：关闭时直接回源，但仍记录 bypass 指标。
     var enableSingleFlight: Bool = true
 
+    // FakeBackend 模拟网络/IO 回源；TTLCache 用于演示缓存命中、击穿与 SWR。
     private let backend = FakeBackend()
     private let cache = TTLCache()
+
+    // SingleFlight<String>：对同 key 的并发回源做合并。
     private let sf = SingleFlight<String>()
+
+    // DemoMetrics + observer：用于统计 origin/coalesced/stale/bypass/reject/timeout、等待时延分位等。
     private let metrics = DemoMetrics()
     private lazy var observer: SingleFlightObserver = MetricsObserver(metrics: metrics)
 
+    // 场景策略（生产边界的“落点”）：
+    // - effect：是否允许合并；非可合并的副作用请求要 bypass。
+    // - timeoutMs：兜底清理 inflight，防止 start 永不回调造成“挂死”。
+    // - maxWaiters：防止热点 key 等待队列无限增长。
+    // - failureStrategy：共享失败是否广播给所有等待者，还是让 joiner 单独重试（常用于热点详情/IO，避免一次错误放大）。
+    // - staleWhileRevalidate：是否允许先返回 stale，再后台刷新。
     private let refreshPolicy = SingleFlightPolicy(effect: .idempotentSideEffect, timeoutMs: 1500, maxWaiters: 12, failureStrategy: .broadcastSharedFailure, staleWhileRevalidate: false)
     private let profilePolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 1200, maxWaiters: 24, failureStrategy: .broadcastSharedFailure, staleWhileRevalidate: false)
     private let configPolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 1200, maxWaiters: 24, failureStrategy: .broadcastSharedFailure, staleWhileRevalidate: true)
@@ -402,18 +462,28 @@ private final class DemoRepository {
     private let cachePolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 1200, maxWaiters: 48, failureStrategy: .broadcastSharedFailure, staleWhileRevalidate: true)
     private let dbPolicy = SingleFlightPolicy(effect: .readOnly, timeoutMs: 900, maxWaiters: 16, failureStrategy: .retryJoinersIndividually, staleWhileRevalidate: false)
 
+    // snapshot：给 UI 渲染指标；reset：清空缓存、inflight 与指标，方便对比开关前后效果。
     func snapshot() -> DemoMetricsSnapshot { metrics.snapshot() }
     func reset() { metrics.reset(); cache.clear(); sf.clear() }
 
+    // run：唯一的“回源入口”。
+    // - singleflight=ON：进入合并逻辑（origin 降、coalesced 升）。
+    // - singleflight=OFF：直接回源，但仍埋 bypass 指标，便于线上降级后评估影响。
     private func run(key: String, policy: SingleFlightPolicy, start: @escaping (@escaping (Result<String, Error>) -> Void) -> Void, completion: @escaping (Result<String, Error>) -> Void) {
         if enableSingleFlight { sf.run(key: key, policy: policy, start: start, completion: completion, observer: observer) }
         else { observer.onBypass(key: key, reason: "singleflight-disabled"); start(completion) }
     }
 
+    // revalidate：SWR 的“后台刷新”路径。
+    // 这里刻意忽略结果（fire-and-forget），但仍会通过 observer 记录 origin/coalesced/timeout 等。
     private func revalidate(key: String, policy: SingleFlightPolicy, start: @escaping (@escaping (Result<String, Error>) -> Void) -> Void) {
         run(key: key, policy: policy, start: start) { _ in }
     }
 
+    // serveFreshOrStale：SWR 核心逻辑。
+    // - 有 fresh：直接返回，避免不必要回源。
+    // - 无 fresh，但允许 SWR 且有 stale：先返回 stale（打点 stale），再后台 singleflight 回源刷新。
+    // - 其余情况：走正常回源（是否 singleflight 由 enableSingleFlight 决定）。
     private func serveFreshOrStale(cacheKey: String, key: String, policy: SingleFlightPolicy, start: @escaping (@escaping (Result<String, Error>) -> Void) -> Void, completion: @escaping (Result<String, Error>) -> Void) {
         if let fresh = cache.getFresh(cacheKey) { completion(.success("fresh \(fresh)")); return }
         if policy.staleWhileRevalidate, let stale = cache.getStale(cacheKey) {
@@ -425,6 +495,8 @@ private final class DemoRepository {
         run(key: key, policy: policy, start: start, completion: completion)
     }
 
+    // canonicalQuery：对 query 做稳定化，避免同语义不同顺序导致 key 过细、合并率下降。
+    // 生产中通常还会做 URL encode、默认值填充、空值剔除等（本 Demo 仅演示排序）。
     private func canonicalQuery(_ query: [String: String]) -> String {
         query.keys.sorted().map { key in
             let value = query[key] ?? ""
@@ -432,12 +504,19 @@ private final class DemoRepository {
         }.joined(separator: "&")
     }
 
+    // 场景 1：登录态 / Token 刷新
+    // - 现实触发：多个请求同时 401 / accessToken 过期。
+    // - key：应包含 userId/scope/app/env/tokenFamily，避免跨账号/环境串合。
+    // - 策略：幂等副作用可合并；失败通常需要统一收敛处理（demo 仅演示广播失败）。
     func refreshToken(userId: String, authScope: String, completion: @escaping (Result<String, Error>) -> Void) {
         let key = SFKey.tokenRefresh(userId: userId, authScope: authScope, appId: appId, env: env, tokenFamily: "session")
         let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in self.backend.call(path: "POST /auth/refresh", delayMs: 320, completion: done) }
         run(key: key, policy: refreshPolicy, start: start, completion: completion)
     }
 
+    // 场景 2：用户基础信息/权限配置拉取
+    // - 现实触发：登录后首屏、进入个人页/设置页，多模块同时依赖。
+    // - key：userId + scope + locale + app/schema 版本（避免字段协议变化时误复用）。
     func fetchMe(userId: String, authScope: String, locale: String, completion: @escaping (Result<String, Error>) -> Void) {
         let key = SFKey.me(userId: userId, authScope: authScope, locale: locale, appVersion: appVersion, schemaVersion: schemaVersion)
         let start: (@escaping (Result<String, Error>) -> Void) -> Void = { done in self.backend.call(path: "GET /me", delayMs: 260, completion: done) }
