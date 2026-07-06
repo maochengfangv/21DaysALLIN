@@ -6,14 +6,13 @@
 //
 
 import UIKit
+import Flutter
+import FlutterPluginRegistrant
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
-
-
-
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        FlutterEngineProvider.shared.startIfNeeded()
         return true
     }
 
@@ -31,6 +30,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Use this method to release any resources that were specific to the discarded scenes, as they will not return.
     }
 
+}
 
+final class FlutterEngineProvider {
+    static let shared = FlutterEngineProvider()
+
+    let engine: FlutterEngine
+    private var isRunning = false
+
+    private init() {
+        engine = FlutterEngine(name: "main_flutter_engine")
+    }
+
+    func startIfNeeded() {
+        guard !isRunning else { return }
+        engine.run()
+        GeneratedPluginRegistrant.register(with: engine)
+        HybridRouter.shared.attach(engine: engine)
+        isRunning = true
+    }
 }
 
