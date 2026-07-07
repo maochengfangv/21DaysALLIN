@@ -46,8 +46,9 @@ final class FlutterEngineProvider {
         guard !isRunning else { return }
         engine.run()
         GeneratedPluginRegistrant.register(with: engine)
+        NativePlatformViewRegistrar.register(with: engine)
         HybridRouter.shared.attach(engine: engine)
+        HybridChannelBridge.shared.attach(engine: engine)
         isRunning = true
     }
 }
-

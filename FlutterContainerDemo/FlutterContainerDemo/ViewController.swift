@@ -18,7 +18,7 @@ class ViewController: UIViewController {
         view.backgroundColor = .systemBackground
 
         let openFlutterButton = UIButton(type: .system)
-        openFlutterButton.setTitle("Open Flutter Counter", for: .normal)
+        openFlutterButton.setTitle("Open Flutter Channel Demos", for: .normal)
         openFlutterButton.addTarget(self, action: #selector(openFlutterTapped), for: .touchUpInside)
 
         resultLabel.textAlignment = .center
@@ -43,7 +43,7 @@ class ViewController: UIViewController {
     }
 
     @objc private func openFlutterTapped() {
-        HybridRouter.shared.showFlutter(from: self, route: "/counter", params: ["from": "ios"]) { [weak self] result in
+        HybridRouter.shared.showFlutter(from: self, route: "/channel_demos", params: ["from": "ios"]) { [weak self] result in
             self?.resultLabel.text = "Result: \(String(describing: result))"
         }
     }
