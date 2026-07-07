@@ -65,15 +65,11 @@
 		};
 		0CAC0FB62FF5099A00BC0270 /* FlutterContainerDemoTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = FlutterContainerDemoTests;
 			sourceTree = "<group>";
 		};
 		0CAC0FC02FF5099A00BC0270 /* FlutterContainerDemoUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = FlutterContainerDemoUITests;
 			sourceTree = "<group>";
 		};
@@ -139,7 +135,6 @@
 				CE7BEC2F3CFAD0D8C885EC81 /* Pods-FlutterContainerDemoTests.debug.xcconfig */,
 				6CA6D49C38A783689EA2602C /* Pods-FlutterContainerDemoTests.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
