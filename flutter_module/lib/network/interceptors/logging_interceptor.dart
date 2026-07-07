@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../env/app_env.dart';
+
 final class LoggingInterceptor extends Interceptor {
   LoggingInterceptor({
     required bool Function() enabled,
@@ -28,6 +30,9 @@ final class LoggingInterceptor extends Interceptor {
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     options.headers['ua'] = ua;
     options.headers['appVersion'] = appVersion;
+    options.headers['env'] = AppEnv.current.name;
+    options.headers['channel'] = AppEnv.current.channel;
+    options.headers['signature'] = AppEnv.current.signature;
     options.headers.putIfAbsent('requestId', _nextRequestId);
     options.extra['requestId'] = options.headers['requestId']?.toString();
 

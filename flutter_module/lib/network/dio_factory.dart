@@ -1,15 +1,15 @@
 import 'package:dio/dio.dart';
 
+import '../env/app_env.dart';
 import 'auth/token_refresher.dart';
 import 'auth/token_store.dart';
+import 'domain.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'interceptors/cache_interceptor.dart';
 import 'interceptors/logging_interceptor.dart';
 import 'interceptors/retry_interceptor.dart';
 import 'interceptors/unwrap_interceptor.dart';
 import 'mock/mock_adapter.dart';
-
-enum ApiDomain { apiA, apiB }
 
 final class DioFactory {
   DioFactory({
@@ -21,11 +21,6 @@ final class DioFactory {
   final InMemoryTokenStore _tokenStore;
   final MockAdapter _mockAdapter;
 
-  final Map<ApiDomain, String> _baseUrls = <ApiDomain, String>{
-    ApiDomain.apiA: 'https://api-a.mock',
-    ApiDomain.apiB: 'https://api-b.mock',
-  };
-
   Dio createMainDio({
     required TokenRefresher tokenRefresher,
     required InMemoryCacheStore cacheStore,
@@ -33,7 +28,7 @@ final class DioFactory {
   }) {
     final dio = Dio(
       BaseOptions(
-        baseUrl: _baseUrls[ApiDomain.apiA]!,
+        baseUrl: AppEnv.current.baseUrls[ApiDomain.apiA]!,
         connectTimeout: const Duration(milliseconds: 800),
         sendTimeout: const Duration(milliseconds: 800),
         receiveTimeout: const Duration(milliseconds: 800),
@@ -47,7 +42,7 @@ final class DioFactory {
       AuthInterceptor(dio: dio, tokenStore: _tokenStore, tokenRefresher: tokenRefresher),
       RetryInterceptor(dio: dio, defaultOptions: const RetryOptions()),
       CacheInterceptor(store: cacheStore),
-      _BaseUrlInterceptor(baseUrls: _baseUrls),
+      _BaseUrlInterceptor(baseUrls: AppEnv.current.baseUrls),
       LoggingInterceptor(enabled: logEnabled, ua: 'flutter_module', appVersion: '1.0.0'),
     ]);
 
@@ -57,7 +52,7 @@ final class DioFactory {
   Dio createRefreshDio({required bool Function() logEnabled}) {
     final dio = Dio(
       BaseOptions(
-        baseUrl: _baseUrls[ApiDomain.apiA]!,
+        baseUrl: AppEnv.current.baseUrls[ApiDomain.apiA]!,
         connectTimeout: const Duration(milliseconds: 800),
         sendTimeout: const Duration(milliseconds: 800),
         receiveTimeout: const Duration(milliseconds: 800),
@@ -66,7 +61,7 @@ final class DioFactory {
     );
     dio.httpClientAdapter = _mockAdapter;
     dio.interceptors.addAll([
-      _BaseUrlInterceptor(baseUrls: _baseUrls),
+      _BaseUrlInterceptor(baseUrls: AppEnv.current.baseUrls),
       LoggingInterceptor(enabled: logEnabled, ua: 'flutter_module', appVersion: '1.0.0'),
     ]);
     return dio;

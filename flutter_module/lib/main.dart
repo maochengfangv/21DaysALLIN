@@ -7,6 +7,7 @@ import 'package:flutter_plugin/flutter_plugin.dart';
 
 import 'pages/dio_demo_page.dart';
 import 'ui/loading/loading_overlay.dart';
+import 'env/app_env.dart';
 
 enum NavStyle { native, flutter, none }
 
@@ -107,6 +108,7 @@ Future<void> openNativeSample() async {
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  AppEnv.ensureInitialized();
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);

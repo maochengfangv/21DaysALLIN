@@ -1,9 +1,11 @@
 import 'package:dio/dio.dart';
 
+import '../env/app_env.dart';
 import '../ui/loading/loading_controller.dart';
 import 'auth/token_refresher.dart';
 import 'auth/token_store.dart';
 import 'dio_factory.dart';
+import 'domain.dart';
 import 'interceptors/cache_interceptor.dart';
 import 'interceptors/retry_interceptor.dart';
 import 'mock/mock_adapter.dart';
@@ -63,7 +65,7 @@ final class NetworkClient {
   late final Dio _dio;
   late final InMemoryTokenStore _tokenStore;
 
-  static bool _logEnabled = true;
+  static bool _logEnabled = AppEnv.current.httpLogEnabled;
 
   bool get logEnabled => _logEnabled;
 

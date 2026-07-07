@@ -1,0 +1,2 @@
+enum ApiDomain { apiA, apiB }
+

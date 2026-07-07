@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../env/app_env.dart';
 import '../network/auth/token_store.dart';
-import '../network/dio_factory.dart';
+import '../network/domain.dart';
 import '../network/interceptors/cache_interceptor.dart';
 import '../network/interceptors/retry_interceptor.dart';
 import '../network/model/app_exception.dart';
@@ -209,6 +210,9 @@ final class _DioDemoPageState extends State<DioDemoPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text('env: ${AppEnv.current.name}'),
+                      Text('channel: ${AppEnv.current.channel}'),
+                      Text('signature: ${AppEnv.current.signature}'),
                       Text('navStyle: ${widget.navStyle}'),
                       const SizedBox(height: 4),
                       Text('accessToken: ${tokens?.accessToken ?? '(null)'}'),
@@ -278,4 +282,3 @@ final class _DioDemoPageState extends State<DioDemoPage> {
     );
   }
 }
-
