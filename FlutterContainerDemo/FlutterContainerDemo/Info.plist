@@ -21,5 +21,12 @@
 			</array>
 		</dict>
 	</dict>
+
+	<key>NSCameraUsageDescription</key>
+	<string>需要访问相机用于拍照/插件 Demo 验证</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册用于选择照片/插件 Demo 验证</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要保存照片到相册用于拍照/插件 Demo 验证</string>
 </dict>
 </plist>

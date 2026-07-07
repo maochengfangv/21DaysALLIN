@@ -65,11 +65,15 @@
 		};
 		0CAC0FB62FF5099A00BC0270 /* FlutterContainerDemoTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = FlutterContainerDemoTests;
 			sourceTree = "<group>";
 		};
 		0CAC0FC02FF5099A00BC0270 /* FlutterContainerDemoUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = FlutterContainerDemoUITests;
 			sourceTree = "<group>";
 		};
@@ -161,6 +165,7 @@
 				0CAC0F9A2FF5099700BC0270 /* Frameworks */,
 				0CAC0F9B2FF5099700BC0270 /* Resources */,
 				0C88CAD23EDA940DE2EEFA65 /* [CP-User] Embed Flutter Build flutter_module Script */,
+				CECAF1AC1CCAAFF8181FB175 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -204,6 +209,7 @@
 				0CAC0FB92FF5099A00BC0270 /* Sources */,
 				0CAC0FBA2FF5099A00BC0270 /* Frameworks */,
 				0CAC0FBB2FF5099A00BC0270 /* Resources */,
+				AA9772C9F9AC89A94F3F1730 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -372,6 +378,40 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "set -e\nset -u\nsource \"${SRCROOT}/../flutter_module/.ios/Flutter/flutter_export_environment.sh\"\nexport VERBOSE_SCRIPT_LOGGING=1 && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/xcode_backend.sh build";
+		};
+		AA9772C9F9AC89A94F3F1730 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-FlutterContainerDemo-FlutterContainerDemoUITests/Pods-FlutterContainerDemo-FlutterContainerDemoUITests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-FlutterContainerDemo-FlutterContainerDemoUITests/Pods-FlutterContainerDemo-FlutterContainerDemoUITests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-FlutterContainerDemo-FlutterContainerDemoUITests/Pods-FlutterContainerDemo-FlutterContainerDemoUITests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		CECAF1AC1CCAAFF8181FB175 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-FlutterContainerDemo/Pods-FlutterContainerDemo-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-FlutterContainerDemo/Pods-FlutterContainerDemo-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-FlutterContainerDemo/Pods-FlutterContainerDemo-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
 

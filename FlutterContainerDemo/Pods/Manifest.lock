@@ -1,21 +1,28 @@
 PODS:
   - Flutter (1.0.0)
+  - flutter_plugin (0.0.1):
+    - Flutter
   - FlutterPluginRegistrant (0.0.1):
     - Flutter
+    - flutter_plugin
 
 DEPENDENCIES:
   - Flutter (from `../flutter_module/.ios/Flutter`)
+  - flutter_plugin (from `../flutter_module/.ios/.symlinks/plugins/flutter_plugin/ios`)
   - FlutterPluginRegistrant (from `../flutter_module/.ios/Flutter/FlutterPluginRegistrant`)
 
 EXTERNAL SOURCES:
   Flutter:
     :path: "../flutter_module/.ios/Flutter"
+  flutter_plugin:
+    :path: "../flutter_module/.ios/.symlinks/plugins/flutter_plugin/ios"
   FlutterPluginRegistrant:
     :path: "../flutter_module/.ios/Flutter/FlutterPluginRegistrant"
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  FlutterPluginRegistrant: 1bf2b93dcc6a731089dfe77f7a867be153c5008f
+  flutter_plugin: 48db946e9d58ce86b16a0a0a25495b4e75fc2b34
+  FlutterPluginRegistrant: ed7786c847814c2ea869708c5bec96758cf101f9
 
 PODFILE CHECKSUM: 76efad292cae92894eecce49243d66d0293822fd
 

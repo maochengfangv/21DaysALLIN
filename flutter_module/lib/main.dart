@@ -3,12 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_plugin/flutter_plugin.dart';
 
-enum NavStyle {
-  native,
-  flutter,
-  none,
-}
+enum NavStyle { native, flutter, none }
 
 NavStyle navStyleFrom(dynamic value, {NavStyle fallback = NavStyle.flutter}) {
   final raw = value?.toString();
@@ -46,10 +43,13 @@ class HybridChannels {
     HybridChannelNames.messageStandard,
     StandardMessageCodec(),
   );
-  static const platformViewControl = MethodChannel(HybridChannelNames.platformViewControl);
+  static const platformViewControl = MethodChannel(
+    HybridChannelNames.platformViewControl,
+  );
 }
 
-String createRequestId(String prefix) => '$prefix-${DateTime.now().microsecondsSinceEpoch}';
+String createRequestId(String prefix) =>
+    '$prefix-${DateTime.now().microsecondsSinceEpoch}';
 
 String prettyPrintPayload(Object? payload) {
   if (payload == null) return 'null';
@@ -60,7 +60,8 @@ String prettyPrintPayload(Object? payload) {
 }
 
 String colorToHex(Color color) {
-  String hex(int value) => value.toRadixString(16).padLeft(2, '0').toUpperCase();
+  String hex(int value) =>
+      value.toRadixString(16).padLeft(2, '0').toUpperCase();
   return '#${hex(color.alpha)}${hex(color.red)}${hex(color.green)}${hex(color.blue)}';
 }
 
@@ -97,16 +98,24 @@ Future<void> openNativeSample() async {
   await HybridChannels.router.invokeMethod('openNative', {
     'version': 1,
     'route': 'native/sample',
-    'params': {
-      'from': 'flutter',
-      'ts': DateTime.now().toIso8601String(),
-    },
+    'params': {'from': 'flutter', 'ts': DateTime.now().toIso8601String()},
   });
 }
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const HybridApp());
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+  };
+
+  runZonedGuarded(() {
+    runApp(const HybridApp());
+  }, (error, stack) {
+    debugPrint('Uncaught zone error: $error');
+    debugPrint('$stack');
+  });
 }
 
 class HybridApp extends StatefulWidget {
@@ -124,14 +133,18 @@ class _HybridAppState extends State<HybridApp> {
   void initState() {
     super.initState();
     HybridChannels.router.setMethodCallHandler(_onMethodCall);
-    unawaited(HybridChannels.router.invokeMethod('flutterReady', {'version': 1}));
+    unawaited(
+      HybridChannels.router.invokeMethod('flutterReady', {'version': 1}),
+    );
   }
 
   Future<dynamic> _onMethodCall(MethodCall call) async {
     switch (call.method) {
       case 'pushRoute':
       case 'showRoute':
-        return _showRoute((call.arguments as Map?)?.cast<String, dynamic>() ?? const {});
+        return _showRoute(
+          (call.arguments as Map?)?.cast<String, dynamic>() ?? const {},
+        );
       case 'resetToBootstrap':
         return _resetToBootstrap();
       default:
@@ -141,7 +154,8 @@ class _HybridAppState extends State<HybridApp> {
 
   Future<void> _showRoute(Map<String, dynamic> args) async {
     final route = args['route'] as String? ?? '/';
-    final params = (args['params'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final params =
+        (args['params'] as Map?)?.cast<String, dynamic>() ?? const {};
     final navStyle = args['navStyle'];
     final requestId = args['requestId'];
 
@@ -186,9 +200,14 @@ class _HybridAppState extends State<HybridApp> {
       title: 'Flutter Hybrid Demos',
       navigatorKey: _navKey,
       onGenerateRoute: (settings) {
-        final args = (settings.arguments as Map?)?.cast<String, dynamic>() ?? const {};
-        final params = (args['params'] as Map?)?.cast<String, dynamic>() ?? const {};
-        final navStyle = navStyleFrom(args['navStyle'], fallback: NavStyle.flutter);
+        final args =
+            (settings.arguments as Map?)?.cast<String, dynamic>() ?? const {};
+        final params =
+            (args['params'] as Map?)?.cast<String, dynamic>() ?? const {};
+        final navStyle = navStyleFrom(
+          args['navStyle'],
+          fallback: NavStyle.flutter,
+        );
 
         switch (settings.name) {
           case '/':
@@ -233,6 +252,11 @@ class _HybridAppState extends State<HybridApp> {
                 from: params['from']?.toString(),
                 navStyle: navStyle,
               ),
+              settings: settings,
+            );
+          case '/plugin_demo/flutter_plugin':
+            return MaterialPageRoute<void>(
+              builder: (_) => FlutterPluginDemoPage(navStyle: navStyle),
               settings: settings,
             );
           default:
@@ -310,10 +334,7 @@ class HybridPageScaffold extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                TextButton(
-                  onPressed: onClose,
-                  child: const Text('Close'),
-                ),
+                TextButton(onPressed: onClose, child: const Text('Close')),
               ],
             ),
           ),
@@ -332,10 +353,7 @@ class HybridPageScaffold extends StatelessWidget {
           ? AppBar(
               title: Text(title),
               actions: [
-                IconButton(
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close),
-                ),
+                IconButton(onPressed: onClose, icon: const Icon(Icons.close)),
               ],
             )
           : null,
@@ -345,17 +363,15 @@ class HybridPageScaffold extends StatelessWidget {
 }
 
 class ChannelDemoHomePage extends StatelessWidget {
-  const ChannelDemoHomePage({
-    super.key,
-    required this.navStyle,
-    this.source,
-  });
+  const ChannelDemoHomePage({super.key, required this.navStyle, this.source});
 
   final NavStyle navStyle;
   final String? source;
 
   void _openDemo(BuildContext context, String route) {
-    Navigator.of(context).pushNamed(route, arguments: {'navStyle': navStyle.name});
+    Navigator.of(
+      context,
+    ).pushNamed(route, arguments: {'navStyle': navStyle.name});
   }
 
   @override
@@ -363,7 +379,8 @@ class ChannelDemoHomePage extends StatelessWidget {
     return HybridPageScaffold(
       title: 'Channel Demos',
       navStyle: navStyle,
-      onClose: () => closeFlutterWithResult({'message': 'closed from demo home'}),
+      onClose: () =>
+          closeFlutterWithResult({'message': 'closed from demo home'}),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -373,7 +390,10 @@ class ChannelDemoHomePage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Single FlutterEngine Add-to-App', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Single FlutterEngine Add-to-App',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
                   Text('Current navStyle: ${navStyle.name}'),
                   Text('Opened from: ${source ?? 'unknown'}'),
@@ -395,6 +415,11 @@ class ChannelDemoHomePage extends StatelessWidget {
           FilledButton(
             onPressed: () => _openDemo(context, '/channel_demos/message'),
             child: const Text('Open BasicMessageChannel Demo'),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () => _openDemo(context, '/plugin_demo/flutter_plugin'),
+            child: const Text('Open Plugin Demo'),
           ),
           const SizedBox(height: 12),
           FilledButton(
@@ -431,10 +456,9 @@ class _MethodChannelDemoPageState extends State<MethodChannelDemoPage> {
 
   Future<void> _invoke(String method) async {
     final requestId = createRequestId(method);
-    final response = await HybridChannels.method.invokeMethod<Object?>(
-      method,
-      {'requestId': requestId},
-    );
+    final response = await HybridChannels.method.invokeMethod<Object?>(method, {
+      'requestId': requestId,
+    });
     if (!mounted) return;
     setState(() {
       _logs.insert(0, prettyPrintPayload(response));
@@ -476,7 +500,9 @@ class _MethodChannelDemoPageState extends State<MethodChannelDemoPage> {
           const SizedBox(height: 16),
           ResultCard(
             title: 'Responses',
-            content: _logs.isEmpty ? 'Tap a button to call iOS.' : _logs.join('\n\n'),
+            content: _logs.isEmpty
+                ? 'Tap a button to call iOS.'
+                : _logs.join('\n\n'),
           ),
         ],
       ),
@@ -601,10 +627,12 @@ class BasicMessageChannelDemoPage extends StatefulWidget {
   final NavStyle navStyle;
 
   @override
-  State<BasicMessageChannelDemoPage> createState() => _BasicMessageChannelDemoPageState();
+  State<BasicMessageChannelDemoPage> createState() =>
+      _BasicMessageChannelDemoPageState();
 }
 
-class _BasicMessageChannelDemoPageState extends State<BasicMessageChannelDemoPage> {
+class _BasicMessageChannelDemoPageState
+    extends State<BasicMessageChannelDemoPage> {
   String _stringResponse = 'Tap a button to send a string message.';
   String _mapResponse = 'Tap a button to send a standard message.';
 
@@ -641,7 +669,8 @@ class _BasicMessageChannelDemoPageState extends State<BasicMessageChannelDemoPag
       title: 'BasicMessageChannel Demo',
       navStyle: widget.navStyle,
       canPop: true,
-      onClose: () => closeFlutterWithResult({'demo': 'message', 'closed': true}),
+      onClose: () =>
+          closeFlutterWithResult({'demo': 'message', 'closed': true}),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -662,7 +691,10 @@ class _BasicMessageChannelDemoPageState extends State<BasicMessageChannelDemoPag
           const SizedBox(height: 16),
           ResultCard(title: 'StringCodec Response', content: _stringResponse),
           const SizedBox(height: 12),
-          ResultCard(title: 'StandardMessageCodec Response', content: _mapResponse),
+          ResultCard(
+            title: 'StandardMessageCodec Response',
+            content: _mapResponse,
+          ),
         ],
       ),
     );
@@ -717,13 +749,11 @@ class _PlatformViewDemoPageState extends State<PlatformViewDemoPage> {
     }
 
     try {
-      final response = await HybridChannels.platformViewControl.invokeMethod<Object?>(
-        'updateNativeView',
-        <String, Object?>{
-          'viewId': platformViewId,
-          ..._buildNativeProps(),
-        },
-      );
+      final response = await HybridChannels.platformViewControl
+          .invokeMethod<Object?>('updateNativeView', <String, Object?>{
+            'viewId': platformViewId,
+            ..._buildNativeProps(),
+          });
 
       if (!mounted) return;
       setState(() {
@@ -828,7 +858,8 @@ class _PlatformViewDemoPageState extends State<PlatformViewDemoPage> {
       title: 'PlatformView Demo',
       navStyle: widget.navStyle,
       canPop: true,
-      onClose: () => closeFlutterWithResult({'demo': 'platform_view', 'closed': true}),
+      onClose: () =>
+          closeFlutterWithResult({'demo': 'platform_view', 'closed': true}),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -838,7 +869,10 @@ class _PlatformViewDemoPageState extends State<PlatformViewDemoPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Flutter -> iOS Native View', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Flutter -> iOS Native View',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
                   Text('初始属性通过 creationParams 传入；运行中通过 MethodChannel 更新。'),
                   const SizedBox(height: 12),
@@ -859,8 +893,10 @@ class _PlatformViewDemoPageState extends State<PlatformViewDemoPage> {
                               child: UiKitView(
                                 viewType: HybridChannelNames.nativeViewType,
                                 creationParams: _buildNativeProps(),
-                                creationParamsCodec: const StandardMessageCodec(),
-                                onPlatformViewCreated: _handlePlatformViewCreated,
+                                creationParamsCodec:
+                                    const StandardMessageCodec(),
+                                onPlatformViewCreated:
+                                    _handlePlatformViewCreated,
                               ),
                             ),
                           )
@@ -879,7 +915,10 @@ class _PlatformViewDemoPageState extends State<PlatformViewDemoPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('动态控制面板', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    '动态控制面板',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _textController,
@@ -1036,15 +1075,16 @@ class _CounterPageState extends State<CounterPage> {
       title: 'Counter $subtitle',
       navStyle: widget.navStyle,
       canPop: true,
-      onClose: () => closeFlutterWithResult({
-        'counter': _counter,
-        'from': widget.from,
-      }),
+      onClose: () =>
+          closeFlutterWithResult({'counter': _counter, 'from': widget.from}),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('counter: $_counter', style: Theme.of(context).textTheme.headlineMedium),
+            Text(
+              'counter: $_counter',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
             const SizedBox(height: 12),
             FilledButton(
               onPressed: () => setState(() => _counter++),
@@ -1057,8 +1097,261 @@ class _CounterPageState extends State<CounterPage> {
   }
 }
 
+class FlutterPluginDemoPage extends StatefulWidget {
+  const FlutterPluginDemoPage({super.key, required this.navStyle});
+
+  final NavStyle navStyle;
+
+  @override
+  State<FlutterPluginDemoPage> createState() => _FlutterPluginDemoPageState();
+}
+
+class _FlutterPluginDemoPageState extends State<FlutterPluginDemoPage> {
+  final FlutterPluginApi _api = FlutterPluginApi();
+  final TextEditingController _intervalController = TextEditingController(
+    text: '1000',
+  );
+
+  StreamSubscription<Map<String, Object?>>? _eventSub;
+  final List<Map<String, Object?>> _events = <Map<String, Object?>>[];
+
+  String _methodResult = '';
+  String _eventControlResult = '';
+  String _stringMessageResult = '';
+  String _standardMessageResult = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _eventSub = _api.eventStream.listen((event) {
+      if (!mounted) return;
+      setState(() {
+        _events.insert(0, event);
+        if (_events.length > 50) _events.removeLast();
+      });
+    }, onError: (Object error) {
+      if (!mounted) return;
+      setState(() {
+        _events.insert(0, <String, Object?>{
+          'eventName': 'error',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+          'payload': <String, Object?>{'error': error.toString()},
+        });
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_api.stopTicking());
+    unawaited(_eventSub?.cancel());
+    _intervalController.dispose();
+    super.dispose();
+  }
+
+  String _formatResult<T>(Result<T> r) {
+    final dataText = prettyPrintPayload(r.data);
+    return 'code=${r.code.code}(${r.code.name})\nmessage=${r.message}\nrequestId=${r.requestId}\ndata=$dataText';
+  }
+
+  Future<void> _callGetPlatformVersion() async {
+    final r = await _api.getPlatformVersion();
+    if (!mounted) return;
+    setState(() => _methodResult = _formatResult(r));
+  }
+
+  Future<void> _callGetDeviceInfo() async {
+    final r = await _api.getDeviceInfo();
+    if (!mounted) return;
+    setState(() => _methodResult = _formatResult(r));
+  }
+
+  Future<void> _callRequestCameraPermission() async {
+    final r = await _api.requestCameraPermission();
+    if (!mounted) return;
+    setState(() => _methodResult = _formatResult(r));
+  }
+
+  Future<void> _startTicking() async {
+    final interval = int.tryParse(_intervalController.text) ?? 1000;
+    final r = await _api.startTicking(intervalMs: interval);
+    if (!mounted) return;
+    setState(() => _eventControlResult = _formatResult(r));
+  }
+
+  Future<void> _stopTicking() async {
+    final r = await _api.stopTicking();
+    if (!mounted) return;
+    setState(() => _eventControlResult = _formatResult(r));
+  }
+
+  Future<void> _sendStringMessage() async {
+    final r = await _api.sendStringMessage(text: 'hello from flutter');
+    if (!mounted) return;
+    setState(() => _stringMessageResult = _formatResult(r));
+  }
+
+  Future<void> _sendStandardMessage() async {
+    final r = await _api.sendStandardMessage(
+      payload: <String, Object?>{
+        'text': 'hello',
+        'number': 42,
+        'bytes': Uint8List.fromList(<int>[9, 8, 7, 6]),
+      },
+    );
+    if (!mounted) return;
+    setState(() => _standardMessageResult = _formatResult(r));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HybridPageScaffold(
+      title: 'Plugin Demo',
+      navStyle: widget.navStyle,
+      canPop: true,
+      onClose: () => closeFlutterWithResult({'demo': 'plugin_demo', 'closed': true}),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('MethodChannel', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      FilledButton(
+                        onPressed: _callGetPlatformVersion,
+                        child: const Text('getPlatformVersion'),
+                      ),
+                      FilledButton(
+                        onPressed: _callGetDeviceInfo,
+                        child: const Text('getDeviceInfo'),
+                      ),
+                      FilledButton(
+                        onPressed: _callRequestCameraPermission,
+                        child: const Text('requestCameraPermission'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SelectableText(_methodResult.isEmpty ? 'No result yet' : _methodResult),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('EventChannel', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _intervalController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'intervalMs',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton(onPressed: _startTicking, child: const Text('Start')),
+                      const SizedBox(width: 12),
+                      OutlinedButton(onPressed: _stopTicking, child: const Text('Stop')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SelectableText(_eventControlResult.isEmpty ? 'No control result yet' : _eventControlResult),
+                  const SizedBox(height: 12),
+                  Text('Events (${_events.length})', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 220,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Theme.of(context).dividerColor),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(8),
+                        itemCount: _events.length,
+                        itemBuilder: (context, index) {
+                          final text = prettyPrintPayload(_events[index]);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(text),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('BasicMessageChannel', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      FilledButton(
+                        onPressed: _sendStringMessage,
+                        child: const Text('StringCodec'),
+                      ),
+                      FilledButton(
+                        onPressed: _sendStandardMessage,
+                        child: const Text('StandardCodec'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text('StringCodec Result', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 6),
+                  SelectableText(
+                    _stringMessageResult.isEmpty ? 'No result yet' : _stringMessageResult,
+                  ),
+                  const SizedBox(height: 12),
+                  Text('StandardCodec Result', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 6),
+                  SelectableText(
+                    _standardMessageResult.isEmpty ? 'No result yet' : _standardMessageResult,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class UnknownRoutePage extends StatelessWidget {
-  const UnknownRoutePage({super.key, required this.route, required this.navStyle});
+  const UnknownRoutePage({
+    super.key,
+    required this.route,
+    required this.navStyle,
+  });
 
   final String route;
   final NavStyle navStyle;
