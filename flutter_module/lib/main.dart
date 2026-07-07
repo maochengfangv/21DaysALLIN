@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_plugin/flutter_plugin.dart';
 
+import 'pages/dio_demo_page.dart';
+import 'ui/loading/loading_overlay.dart';
+
 enum NavStyle { native, flutter, none }
 
 NavStyle navStyleFrom(dynamic value, {NavStyle fallback = NavStyle.flutter}) {
@@ -199,6 +202,9 @@ class _HybridAppState extends State<HybridApp> {
     return MaterialApp(
       title: 'Flutter Hybrid Demos',
       navigatorKey: _navKey,
+      builder: (context, child) {
+        return LoadingOverlay(child: child ?? const SizedBox.expand());
+      },
       onGenerateRoute: (settings) {
         final args =
             (settings.arguments as Map?)?.cast<String, dynamic>() ?? const {};
@@ -257,6 +263,11 @@ class _HybridAppState extends State<HybridApp> {
           case '/plugin_demo/flutter_plugin':
             return MaterialPageRoute<void>(
               builder: (_) => FlutterPluginDemoPage(navStyle: navStyle),
+              settings: settings,
+            );
+          case '/dio_demo':
+            return MaterialPageRoute<void>(
+              builder: (_) => DioDemoPage(navStyle: navStyle.name),
               settings: settings,
             );
           default:
@@ -420,6 +431,11 @@ class ChannelDemoHomePage extends StatelessWidget {
           FilledButton(
             onPressed: () => _openDemo(context, '/plugin_demo/flutter_plugin'),
             child: const Text('Open Plugin Demo'),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () => _openDemo(context, '/dio_demo'),
+            child: const Text('Open Dio Demo'),
           ),
           const SizedBox(height: 12),
           FilledButton(
