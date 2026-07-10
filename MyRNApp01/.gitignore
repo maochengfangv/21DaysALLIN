@@ -35,6 +35,9 @@ local.properties
 !debug.keystore
 .kotlin/
 
+# Local Android SDK/NDK (should never be committed)
+/.android-sdk/
+
 # node.js
 #
 node_modules/
