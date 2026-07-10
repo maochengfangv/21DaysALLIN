@@ -23,6 +23,8 @@ target 'MyRNApp01' do
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
+  pod 'InterviewNativeKit', :path => '../native/InterviewNativeKit'
+
   post_install do |installer|
     react_native_post_install(
       installer,

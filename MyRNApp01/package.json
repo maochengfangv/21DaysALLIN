@@ -37,5 +37,25 @@
   },
   "engines": {
     "node": ">= 22.11.0"
+  },
+  "codegenConfig": {
+    "name": "InterviewNativeKit",
+    "type": "all",
+    "jsSrcsDir": "src/native/specs",
+    "android": {
+      "javaPackageName": "com.myrnapp01.codegen"
+    },
+    "ios": {
+      "modules": {
+        "InterviewTurboModule": {
+          "className": "InterviewTurboModule"
+        }
+      },
+      "components": {
+        "InterviewFabricCard": {
+          "className": "InterviewFabricCardComponentView"
+        }
+      }
+    }
   }
 }
