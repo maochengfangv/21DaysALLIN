@@ -26,6 +26,10 @@ import { demoStyles } from '../shared/demoStyles';
 import type { ScreenProps } from '../types';
 import { FeedItem } from './feed/FeedItem';
 import {
+  FeedListFooterSkeleton,
+  FeedListSkeleton,
+} from './feed/FeedSkeleton';
+import {
   FEED_TOTAL_COUNT,
   fetchMockFeedDetail,
   fetchMockFeedPage,
@@ -471,6 +475,9 @@ export function FlatListScreen({ goBack }: ScreenProps) {
     return '继续上滑触发下一页';
   }, [data.length, hasMore, loadingMore]);
 
+  const initialLoading = data.length === 0 && refreshing;
+  const appendLoading = data.length > 0 && loadingMore;
+
   return (
     <>
       <Header title="FlatList Performance" goBack={goBack} />
@@ -507,35 +514,43 @@ export function FlatListScreen({ goBack }: ScreenProps) {
             {EXPOSURE_STAY_MS}ms。曝光后只上报一次，并按需拉取
             detail，失败时只重试单条。
           </Text>
+          <Text style={styles.noteText}>
+            首屏使用静态骨架屏承接第一页 loading，分页时只在底部追加
+            skeleton，避免旧内容闪烁。
+          </Text>
         </ResultCard>
 
-        <FlatList
-          style={styles.list}
-          data={data}
-          keyExtractor={keyExtractor}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          onEndReachedThreshold={0.4}
-          onEndReached={onEndReached}
-          initialNumToRender={listTuning.initialNumToRender}
-          maxToRenderPerBatch={listTuning.maxToRenderPerBatch}
-          windowSize={listTuning.windowSize}
-          updateCellsBatchingPeriod={listTuning.updateCellsBatchingPeriod}
-          removeClippedSubviews={Platform.OS === 'android'}
-          showsVerticalScrollIndicator={false}
-          viewabilityConfig={viewabilityConfig.current}
-          onViewableItemsChanged={onViewableItemsChanged.current}
-          ListEmptyComponent={
-            <Text style={styles.footerText}>
-              {refreshing ? '正在拉取 feed 数据...' : '暂无数据'}
-            </Text>
-          }
-          ListFooterComponent={
-            <Text style={styles.footerText}>{footerText}</Text>
-          }
-        />
+        {initialLoading ? (
+          <FeedListSkeleton count={listTuning.initialNumToRender} />
+        ) : (
+          <FlatList
+            style={styles.list}
+            data={data}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            onEndReachedThreshold={0.4}
+            onEndReached={onEndReached}
+            initialNumToRender={listTuning.initialNumToRender}
+            maxToRenderPerBatch={listTuning.maxToRenderPerBatch}
+            windowSize={listTuning.windowSize}
+            updateCellsBatchingPeriod={listTuning.updateCellsBatchingPeriod}
+            removeClippedSubviews={Platform.OS === 'android'}
+            showsVerticalScrollIndicator={false}
+            viewabilityConfig={viewabilityConfig.current}
+            onViewableItemsChanged={onViewableItemsChanged.current}
+            ListEmptyComponent={<Text style={styles.footerText}>暂无数据</Text>}
+            ListFooterComponent={
+              appendLoading ? (
+                <FeedListFooterSkeleton />
+              ) : (
+                <Text style={styles.footerText}>{footerText}</Text>
+              )
+            }
+          />
+        )}
       </ScreenContainer>
     </>
   );
