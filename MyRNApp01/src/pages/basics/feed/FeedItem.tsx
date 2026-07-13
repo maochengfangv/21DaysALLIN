@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ImagePreviewModal } from '../../../components/common/ImagePreviewModal';
+import { ExpandableText } from './ExpandableText';
 import { FeedImageGrid } from './FeedImageGrid';
 import type { FeedDetailStatus, FeedItemData, FeedItemDetail } from './types';
 
@@ -50,7 +51,7 @@ function FeedItemInner({
         <Text style={styles.index}>#{index + 1}</Text>
       </View>
 
-      <Text style={styles.content}>{item.content}</Text>
+      <ExpandableText content={item.content} />
 
       <View style={styles.mediaSection}>
         {hasImages ? (
@@ -305,11 +306,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#2563EB',
     fontWeight: '700',
-  },
-  content: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#1E293B',
   },
   mediaSection: {
     alignItems: 'flex-start',

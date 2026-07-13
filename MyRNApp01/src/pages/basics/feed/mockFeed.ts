@@ -74,7 +74,7 @@ function buildAuthor(index: number): FeedAuthor {
 }
 
 function buildContent(index: number) {
-  const lines = 1 + seededNumber(index + 7, 4);
+  const lines = 2 + seededNumber(index + 7, 5);
   return Array.from({ length: lines }, (_, lineIndex) => {
     return CONTENT_SNIPPETS[(index + lineIndex) % CONTENT_SNIPPETS.length];
   }).join(' ');
