@@ -15,6 +15,13 @@ export type FeedItemData = {
   publishAt: string;
 };
 
+export type FeedItemDetail = {
+  detail: string;
+  commentPreview: string[];
+  hasLiked: boolean;
+  fetchedAt: string;
+};
+
 export type FeedPageResponse = {
   list: FeedItemData[];
   page: number;
@@ -32,3 +39,5 @@ export type FeedImageCacheSource =
   | 'prefetch'
   | 'error'
   | 'unknown';
+
+export type FeedDetailStatus = 'idle' | 'loading' | 'success' | 'error';

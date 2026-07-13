@@ -26,15 +26,39 @@ import type { ScreenProps } from '../types';
 import { FeedItem } from './feed/FeedItem';
 import {
   FEED_TOTAL_COUNT,
+  fetchMockFeedDetail,
   fetchMockFeedPage,
 } from './feed/mockFeed';
-import type { FeedItemData } from './feed/types';
+import type {
+  FeedDetailStatus,
+  FeedItemData,
+  FeedItemDetail,
+} from './feed/types';
+import { trackExposure, trackLazyRequest } from '../../services/analytics';
 
 const SCREEN_POINTS = [
   'FeedItem 与 FeedImageGrid 都做 memo，避免父层状态抖动传导到整表',
   '图片进入可视区域后再挂载，并对超多图片做折叠，优先保证滚动流畅',
+  '曝光埋点与 lazy request 用 ref 状态机去重，只在关键状态变化时刷新 UI',
   '分页、刷新、keyExtractor、renderItem、onEndReached 都保持引用稳定',
 ];
+
+const EXPOSURE_VISIBLE_THRESHOLD = 35;
+const EXPOSURE_STAY_MS = 300;
+
+type ExposureState = {
+  enteredAt: number;
+  timerId: ReturnType<typeof setTimeout> | null;
+  exposed: boolean;
+  index: number;
+};
+
+type FeedStats = {
+  exposureCount: number;
+  requestCount: number;
+  successCount: number;
+  failureCount: number;
+};
 
 export function FlatListScreen({ goBack }: ScreenProps) {
   const screenRenderCountRef = useRef(0);
@@ -48,11 +72,184 @@ export function FlatListScreen({ goBack }: ScreenProps) {
   const [hydratedImageIds, setHydratedImageIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [exposedIds, setExposedIds] = useState<Set<string>>(() => new Set());
+  const [detailStatusMap, setDetailStatusMap] = useState<
+    Record<string, FeedDetailStatus>
+  >({});
+  const [detailMap, setDetailMap] = useState<Record<string, FeedItemDetail>>(
+    {},
+  );
+  const [stats, setStats] = useState<FeedStats>({
+    exposureCount: 0,
+    requestCount: 0,
+    successCount: 0,
+    failureCount: 0,
+  });
 
   const currentPageRef = useRef(1);
   const refreshingRef = useRef(false);
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(true);
+  const exposureStateRef = useRef<Map<string, ExposureState>>(new Map());
+  const requestedIdsRef = useRef<Set<string>>(new Set());
+  const inflightIdsRef = useRef<Set<string>>(new Set());
+  const requestStatusRef = useRef<Map<string, FeedDetailStatus>>(new Map());
+
+  const clearAllExposureTimers = useCallback(() => {
+    exposureStateRef.current.forEach(entry => {
+      if (entry.timerId) {
+        clearTimeout(entry.timerId);
+      }
+    });
+    exposureStateRef.current.clear();
+  }, []);
+
+  const resetExposureSession = useCallback(() => {
+    clearAllExposureTimers();
+    requestedIdsRef.current.clear();
+    inflightIdsRef.current.clear();
+    requestStatusRef.current.clear();
+    setExposedIds(new Set());
+    setDetailStatusMap({});
+    setDetailMap({});
+    setStats({
+      exposureCount: 0,
+      requestCount: 0,
+      successCount: 0,
+      failureCount: 0,
+    });
+  }, [clearAllExposureTimers]);
+
+  const updateDetailStatus = useCallback(
+    (itemId: string, status: FeedDetailStatus) => {
+      if (requestStatusRef.current.get(itemId) === status) {
+        return;
+      }
+
+      requestStatusRef.current.set(itemId, status);
+      setDetailStatusMap(prev => {
+        if (prev[itemId] === status) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [itemId]: status,
+        };
+      });
+    },
+    [],
+  );
+
+  const requestFeedDetail = useCallback(
+    async (
+      itemId: string,
+      index: number,
+      source: 'exposure' | 'retry' = 'exposure',
+    ) => {
+      if (
+        requestedIdsRef.current.has(itemId) ||
+        inflightIdsRef.current.has(itemId)
+      ) {
+        return;
+      }
+
+      inflightIdsRef.current.add(itemId);
+      updateDetailStatus(itemId, 'loading');
+      setStats(prev => ({
+        ...prev,
+        requestCount: prev.requestCount + 1,
+      }));
+
+      trackLazyRequest({
+        itemId,
+        index,
+        timestamp: Date.now(),
+        status: source === 'retry' ? 'retry' : 'start',
+      });
+
+      const startedAt = Date.now();
+
+      try {
+        const detail = await fetchMockFeedDetail(itemId);
+        inflightIdsRef.current.delete(itemId);
+        requestedIdsRef.current.add(itemId);
+        setDetailMap(prev => ({
+          ...prev,
+          [itemId]: detail,
+        }));
+        updateDetailStatus(itemId, 'success');
+        setStats(prev => ({
+          ...prev,
+          successCount: prev.successCount + 1,
+        }));
+        trackLazyRequest({
+          itemId,
+          index,
+          timestamp: Date.now(),
+          status: 'success',
+          durationMs: Date.now() - startedAt,
+        });
+      } catch (error) {
+        inflightIdsRef.current.delete(itemId);
+        updateDetailStatus(itemId, 'error');
+        setStats(prev => ({
+          ...prev,
+          failureCount: prev.failureCount + 1,
+        }));
+        trackLazyRequest({
+          itemId,
+          index,
+          timestamp: Date.now(),
+          status: 'error',
+          durationMs: Date.now() - startedAt,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [updateDetailStatus],
+  );
+
+  const confirmExposure = useCallback(
+    (item: FeedItemData, index: number, enteredAt: number) => {
+      const previous = exposureStateRef.current.get(item.id);
+
+      if (previous?.exposed) {
+        return;
+      }
+
+      exposureStateRef.current.set(item.id, {
+        enteredAt,
+        timerId: null,
+        exposed: true,
+        index,
+      });
+
+      setExposedIds(prev => {
+        if (prev.has(item.id)) {
+          return prev;
+        }
+        const next = new Set(prev);
+        next.add(item.id);
+        return next;
+      });
+      setStats(prev => ({
+        ...prev,
+        exposureCount: prev.exposureCount + 1,
+      }));
+
+      trackExposure({
+        itemId: item.id,
+        index,
+        timestamp: Date.now(),
+        visibleThreshold: EXPOSURE_VISIBLE_THRESHOLD,
+        stayMs: Date.now() - enteredAt,
+      });
+
+      requestFeedDetail(item.id, index, 'exposure').catch(() => undefined);
+    },
+    [requestFeedDetail],
+  );
 
   const loadPage = useCallback(
     async (targetPage: number, mode: 'refresh' | 'append') => {
@@ -63,6 +260,7 @@ export function FlatListScreen({ goBack }: ScreenProps) {
         refreshingRef.current = true;
         setRefreshing(true);
         setHydratedImageIds(new Set());
+        resetExposureSession();
       } else {
         if (
           loadingMoreRef.current ||
@@ -95,7 +293,7 @@ export function FlatListScreen({ goBack }: ScreenProps) {
         }
       }
     },
-    [],
+    [resetExposureSession],
   );
 
   useEffect(() => {
@@ -113,31 +311,105 @@ export function FlatListScreen({ goBack }: ScreenProps) {
     loadPage(currentPageRef.current + 1, 'append').catch(() => undefined);
   }, [loadPage]);
 
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      setHydratedImageIds(prevIds => {
-        let changed = false;
-        const nextIds = new Set(prevIds);
+  useEffect(() => {
+    return () => {
+      clearAllExposureTimers();
+    };
+  }, [clearAllExposureTimers]);
 
-        viewableItems.forEach(viewToken => {
-          const item = viewToken.item as FeedItemData | undefined;
-          if (viewToken.isViewable && item?.images.length && !nextIds.has(item.id)) {
-            nextIds.add(item.id);
-            changed = true;
-          }
-        });
+  const markHydratedImages = useCallback((viewableItems: ViewToken[]) => {
+    setHydratedImageIds(prevIds => {
+      let changed = false;
+      const nextIds = new Set(prevIds);
 
-        return changed ? nextIds : prevIds;
+      viewableItems.forEach(viewToken => {
+        const item = viewToken.item as FeedItemData | undefined;
+        if (
+          viewToken.isViewable &&
+          item?.images.length &&
+          !nextIds.has(item.id)
+        ) {
+          nextIds.add(item.id);
+          changed = true;
+        }
       });
+
+      return changed ? nextIds : prevIds;
+    });
+  }, []);
+
+  const handleVisibilityChange = useCallback(
+    (changedItems: ViewToken[]) => {
+      changedItems.forEach(viewToken => {
+        const item = viewToken.item as FeedItemData | undefined;
+        if (!item) {
+          return;
+        }
+
+        const previousState = exposureStateRef.current.get(item.id);
+
+        if (viewToken.isViewable) {
+          if (previousState?.exposed || previousState?.timerId) {
+            return;
+          }
+
+          const enteredAt = Date.now();
+          const timerId = setTimeout(() => {
+            confirmExposure(item, viewToken.index ?? 0, enteredAt);
+          }, EXPOSURE_STAY_MS);
+
+          exposureStateRef.current.set(item.id, {
+            enteredAt,
+            timerId,
+            exposed: false,
+            index: viewToken.index ?? 0,
+          });
+          return;
+        }
+
+        if (previousState?.timerId) {
+          clearTimeout(previousState.timerId);
+        }
+
+        if (previousState?.exposed) {
+          exposureStateRef.current.set(item.id, {
+            ...previousState,
+            timerId: null,
+          });
+        } else {
+          exposureStateRef.current.delete(item.id);
+        }
+      });
+    },
+    [confirmExposure],
+  );
+
+  const onViewableItemsChanged = useRef(
+    ({
+      viewableItems,
+      changed,
+    }: {
+      viewableItems: ViewToken[];
+      changed: ViewToken[];
+    }) => {
+      markHydratedImages(viewableItems);
+      handleVisibilityChange(changed);
     },
   );
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 35,
+    itemVisiblePercentThreshold: EXPOSURE_VISIBLE_THRESHOLD,
     waitForInteraction: true,
   });
 
   const keyExtractor = useCallback((item: FeedItemData) => item.id, []);
+
+  const retryFeedDetail = useCallback(
+    (itemId: string, itemIndex: number) => {
+      requestFeedDetail(itemId, itemIndex, 'retry').catch(() => undefined);
+    },
+    [requestFeedDetail],
+  );
 
   const renderItem = useCallback(
     ({ item, index }: ListRenderItemInfo<FeedItemData>) => {
@@ -146,10 +418,14 @@ export function FlatListScreen({ goBack }: ScreenProps) {
           item={item}
           index={index}
           shouldRenderImages={hydratedImageIds.has(item.id)}
+          isExposed={exposedIds.has(item.id)}
+          detailStatus={detailStatusMap[item.id] ?? 'idle'}
+          detail={detailMap[item.id] ?? null}
+          onRetryDetail={retryFeedDetail}
         />
       );
     },
-    [hydratedImageIds],
+    [detailMap, detailStatusMap, exposedIds, hydratedImageIds, retryFeedDetail],
   );
 
   const totalImageCount = useMemo(() => {
@@ -181,14 +457,25 @@ export function FlatListScreen({ goBack }: ScreenProps) {
           <MetricPill label="Page" value={page} />
           <MetricPill label="LoadingMore" value={String(loadingMore)} />
           <MetricPill label="HydratedRows" value={hydratedImageIds.size} />
-          <MetricPill label="ScreenRender" value={screenRenderCountRef.current} />
+          <MetricPill label="Exposed" value={stats.exposureCount} />
+          <MetricPill label="Requests" value={stats.requestCount} />
+          <MetricPill label="ReqFail" value={stats.failureCount} />
+          <MetricPill
+            label="ScreenRender"
+            value={screenRenderCountRef.current}
+          />
         </View>
 
         <ResultCard title="面试讲解观察点">
           <Text style={styles.noteText}>
-            当前数据量 {data.length}/{FEED_TOTAL_COUNT}，当前页累计图片 {totalImageCount}{' '}
-            张。可观察 item 内的 render 次数：翻页时旧 item 不应轻易增长，只有新 cell
-            或进入可视区触发图片挂载的 cell 才会变化。
+            当前数据量 {data.length}/{FEED_TOTAL_COUNT}，当前页累计图片{' '}
+            {totalImageCount} 张。可观察 item 内的 render 次数：翻页时旧 item
+            不应轻易增长，只有新 cell 或进入可视区触发图片挂载的 cell 才会变化。
+          </Text>
+          <Text style={styles.noteText}>
+            曝光阈值为可见面积 {EXPOSURE_VISIBLE_THRESHOLD}% + 停留{' '}
+            {EXPOSURE_STAY_MS}ms。曝光后只上报一次，并按需拉取
+            detail，失败时只重试单条。
           </Text>
         </ResultCard>
 
@@ -216,9 +503,7 @@ export function FlatListScreen({ goBack }: ScreenProps) {
             </Text>
           }
           ListFooterComponent={
-            <Text style={styles.footerText}>
-              {footerText}
-            </Text>
+            <Text style={styles.footerText}>{footerText}</Text>
           }
         />
       </ScreenContainer>

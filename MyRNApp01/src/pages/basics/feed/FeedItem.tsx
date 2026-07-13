@@ -1,17 +1,25 @@
 import React, { memo, useCallback, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ImagePreviewModal } from '../../../components/common/ImagePreviewModal';
 import { FeedImageGrid } from './FeedImageGrid';
-import type { FeedItemData } from './types';
+import type { FeedDetailStatus, FeedItemData, FeedItemDetail } from './types';
 
 function FeedItemInner({
   item,
   index,
   shouldRenderImages,
+  isExposed,
+  detailStatus,
+  detail,
+  onRetryDetail,
 }: {
   item: FeedItemData;
   index: number;
   shouldRenderImages: boolean;
+  isExposed: boolean;
+  detailStatus: FeedDetailStatus;
+  detail: FeedItemDetail | null;
+  onRetryDetail?: (itemId: string, index: number) => void;
 }) {
   const renderCountRef = useRef(0);
   renderCountRef.current += 1;
@@ -26,7 +34,8 @@ function FeedItemInner({
             {
               backgroundColor: item.author.avatarColor,
             },
-          ]}>
+          ]}
+        >
           <Text style={styles.avatarText}>{item.author.name.slice(0, 1)}</Text>
         </View>
 
@@ -52,6 +61,66 @@ function FeedItemInner({
         ) : (
           <Text style={styles.textOnly}>纯文本动态，无图片渲染开销</Text>
         )}
+      </View>
+
+      <View style={styles.lazySection}>
+        <View style={styles.statusRow}>
+          <StatusChip
+            label={isExposed ? '已曝光' : '未曝光'}
+            tone={isExposed ? 'success' : 'neutral'}
+          />
+          <StatusChip
+            label={getDetailStatusLabel(detailStatus)}
+            tone={getDetailStatusTone(detailStatus)}
+          />
+        </View>
+
+        {detailStatus === 'idle' ? (
+          <Text style={styles.detailText}>
+            进入视区并停留达到阈值后，再触发详情请求。
+          </Text>
+        ) : null}
+
+        {detailStatus === 'loading' ? (
+          <Text style={styles.detailText}>
+            详情请求中，等待 lazy request 返回...
+          </Text>
+        ) : null}
+
+        {detailStatus === 'success' && detail ? (
+          <View style={styles.detailCard}>
+            <Text style={styles.detailTitle}>
+              {detail.hasLiked ? '已点赞用户视角' : '普通用户视角'}
+            </Text>
+            <Text style={styles.detailText}>{detail.detail}</Text>
+            {detail.commentPreview.map((comment, commentIndex) => (
+              <Text
+                key={`${item.id}-comment-${commentIndex}`}
+                style={styles.commentText}
+              >
+                - {comment}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
+        {detailStatus === 'error' ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>详情请求失败</Text>
+            <Text style={styles.detailText}>
+              当前 item
+              已曝光，但详情接口模拟失败。点击重试只会补这条数据，不会重刷整表。
+            </Text>
+            {onRetryDetail ? (
+              <Pressable
+                onPress={() => onRetryDetail(item.id, index)}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryText}>重试详情请求</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.footer}>
@@ -108,8 +177,76 @@ export const FeedItem = memo(
   (prevProps, nextProps) =>
     prevProps.item === nextProps.item &&
     prevProps.index === nextProps.index &&
-    prevProps.shouldRenderImages === nextProps.shouldRenderImages,
+    prevProps.shouldRenderImages === nextProps.shouldRenderImages &&
+    prevProps.isExposed === nextProps.isExposed &&
+    prevProps.detailStatus === nextProps.detailStatus &&
+    prevProps.detail === nextProps.detail &&
+    prevProps.onRetryDetail === nextProps.onRetryDetail,
 );
+
+function getDetailStatusLabel(status: FeedDetailStatus) {
+  switch (status) {
+    case 'loading':
+      return '请求中';
+    case 'success':
+      return '详情已拉取';
+    case 'error':
+      return '请求失败';
+    default:
+      return '未请求';
+  }
+}
+
+function getDetailStatusTone(status: FeedDetailStatus) {
+  switch (status) {
+    case 'loading':
+      return 'brand';
+    case 'success':
+      return 'success';
+    case 'error':
+      return 'danger';
+    default:
+      return 'neutral';
+  }
+}
+
+function StatusChip({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: 'neutral' | 'brand' | 'success' | 'danger';
+}) {
+  return (
+    <View
+      style={[
+        styles.statusChip,
+        tone === 'brand'
+          ? styles.statusChipBrand
+          : tone === 'success'
+          ? styles.statusChipSuccess
+          : tone === 'danger'
+          ? styles.statusChipDanger
+          : styles.statusChipNeutral,
+      ]}
+    >
+      <Text
+        style={[
+          styles.statusChipText,
+          tone === 'brand'
+            ? styles.statusChipTextBrand
+            : tone === 'success'
+            ? styles.statusChipTextSuccess
+            : tone === 'danger'
+            ? styles.statusChipTextDanger
+            : styles.statusChipTextNeutral,
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   card: {
@@ -177,6 +314,47 @@ const styles = StyleSheet.create({
   mediaSection: {
     alignItems: 'flex-start',
   },
+  lazySection: {
+    gap: 8,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statusChip: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  statusChipNeutral: {
+    backgroundColor: '#F1F5F9',
+  },
+  statusChipBrand: {
+    backgroundColor: '#DBEAFE',
+  },
+  statusChipSuccess: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusChipDanger: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statusChipTextNeutral: {
+    color: '#475569',
+  },
+  statusChipTextBrand: {
+    color: '#1D4ED8',
+  },
+  statusChipTextSuccess: {
+    color: '#15803D',
+  },
+  statusChipTextDanger: {
+    color: '#B91C1C',
+  },
   textOnly: {
     fontSize: 12,
     color: '#64748B',
@@ -184,6 +362,54 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+  detailCard: {
+    gap: 6,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E2E8F0',
+    padding: 10,
+  },
+  errorCard: {
+    gap: 8,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#FECACA',
+    padding: 10,
+  },
+  detailTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  detailText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#475569',
+  },
+  commentText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#334155',
+  },
+  errorTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    backgroundColor: '#FCA5A5',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  retryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7F1D1D',
   },
   footer: {
     flexDirection: 'row',
