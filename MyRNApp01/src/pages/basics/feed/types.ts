@@ -23,3 +23,12 @@ export type FeedPageResponse = {
   totalPages: number;
   hasMore: boolean;
 };
+
+export type FeedImageCacheSource =
+  | 'memory'
+  | 'disk'
+  | 'disk/memory'
+  | 'http'
+  | 'prefetch'
+  | 'error'
+  | 'unknown';

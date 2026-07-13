@@ -1,13 +1,6 @@
-import React, { memo, useMemo, useState } from 'react';
-import {
-  Dimensions,
-  Image,
-  ImageBackground,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React, { memo, useEffect, useMemo, useState } from 'react';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { CachedImage, prefetchFeedImages } from './CachedImage';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const ITEM_HORIZONTAL_PADDING = 24;
@@ -144,6 +137,14 @@ function FeedImageGridInner({
   }, [expanded, images.length, visibleImages]);
   const hiddenCount = images.length - PREVIEW_IMAGE_LIMIT;
 
+  useEffect(() => {
+    if (!shouldRenderImages) {
+      return;
+    }
+
+    prefetchFeedImages(images);
+  }, [images, shouldRenderImages]);
+
   if (!shouldRenderImages) {
     return (
       <View style={styles.placeholder}>
@@ -161,43 +162,28 @@ function FeedImageGridInner({
         {layoutRows.map(row => (
           <View key={row.key} style={styles.row}>
             {row.cells.map(cell => {
-              const imageStyle = [
-                styles.image,
-                { width: cell.width, height: cell.height },
-              ];
+              const imageStyle = {
+                width: cell.width,
+                height: cell.height,
+              };
               const pressImage = () => {
                 onPressImage?.(cell.index);
               };
 
-              if (cell.showMoreOverlay) {
-                return (
-                  <Pressable
-                    key={cell.key}
-                    onPress={pressImage}
-                    style={styles.pressable}>
-                    <ImageBackground
-                      source={{ uri: cell.uri }}
-                      imageStyle={styles.image}
-                      style={imageStyle}>
+              return (
+                <CachedImage
+                  key={cell.key}
+                  uri={cell.uri}
+                  style={imageStyle}
+                  onPress={pressImage}
+                  overlay={
+                    cell.showMoreOverlay ? (
                       <View style={styles.moreOverlay}>
                         <Text style={styles.moreOverlayText}>+{hiddenCount}</Text>
                       </View>
-                    </ImageBackground>
-                  </Pressable>
-                );
-              }
-
-              return (
-                <Pressable
-                  key={cell.key}
-                  onPress={pressImage}
-                  style={styles.pressable}>
-                  <Image
-                    source={{ uri: cell.uri }}
-                    resizeMode="cover"
-                    style={imageStyle}
-                  />
-                </Pressable>
+                    ) : undefined
+                  }
+                />
               );
             })}
           </View>
@@ -240,15 +226,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: GRID_GAP,
   },
-  pressable: {
-    borderRadius: 12,
-  },
-  image: {
-    borderRadius: 12,
-    backgroundColor: '#E2E8F0',
-  },
   moreOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
     borderRadius: 12,
     backgroundColor: 'rgba(15, 23, 42, 0.38)',
     alignItems: 'center',

@@ -32,6 +32,10 @@ const CONTENT_SNIPPETS = [
   '动态高度列表不适合强行上 getItemLayout，错误估算会带来更多抖动。',
   '把重计算和重视图放到真正需要的时候再做，体验会更平滑。',
 ];
+const SHARED_IMAGE_POOL = Array.from({ length: 18 }, (_, index) => {
+  return `https://picsum.photos/seed/feed-cache-${index}/480/480`;
+});
+const BROKEN_IMAGE_URI = 'https://invalid.feed-cache-demo.local/image-error.jpg';
 
 function sleep(ms: number) {
   return new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -61,8 +65,12 @@ function buildContent(index: number) {
 function buildImages(index: number) {
   const imageCount = seededNumber(index + 11, 8);
   return Array.from({ length: imageCount }, (_, imageIndex) => {
-    const seed = `feed-${index}-${imageIndex}`;
-    return `https://picsum.photos/seed/${seed}/480/480`;
+    if (index % 13 === 0 && imageIndex === 0) {
+      return BROKEN_IMAGE_URI;
+    }
+
+    const poolIndex = seededNumber(index * 7 + imageIndex * 11, SHARED_IMAGE_POOL.length);
+    return SHARED_IMAGE_POOL[poolIndex];
   });
 }
 
