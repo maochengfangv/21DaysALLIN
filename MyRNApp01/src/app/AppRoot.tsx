@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { ImagePreviewProvider } from '../services/imagePreviewService';
 import { Screens } from '../pages/index';
 import type { RouteKey } from '../types/demo';
 import { getErrorMessage } from '../utils/error';
@@ -80,16 +81,18 @@ export function AppRoot() {
   }, [goBack, route, stack.length]);
 
   return (
-    <View style={styles.container}>
-      <Screen
-        navigate={(nextRoute: RouteKey) =>
-          setStack(prev => [...prev, nextRoute])
-        }
-        goBack={goBack}
-        lastGlobalError={lastGlobalError}
-        clearGlobalError={() => setLastGlobalError(null)}
-      />
-    </View>
+    <ImagePreviewProvider>
+      <View style={styles.container}>
+        <Screen
+          navigate={(nextRoute: RouteKey) =>
+            setStack(prev => [...prev, nextRoute])
+          }
+          goBack={goBack}
+          lastGlobalError={lastGlobalError}
+          clearGlobalError={() => setLastGlobalError(null)}
+        />
+      </View>
+    </ImagePreviewProvider>
   );
 }
 

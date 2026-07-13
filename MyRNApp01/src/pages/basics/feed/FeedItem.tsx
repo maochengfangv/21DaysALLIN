@@ -1,6 +1,6 @@
-import React, { memo, useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ImagePreviewModal } from '../../../components/common/ImagePreviewModal';
+import { useImagePreview } from '../../../services/imagePreviewService';
 import { ExpandableText } from './ExpandableText';
 import { FeedImageGrid } from './FeedImageGrid';
 import type { FeedDetailStatus, FeedItemData, FeedItemDetail } from './types';
@@ -143,33 +143,24 @@ const FeedItemMedia = memo(function FeedItemMediaInner({
   images: string[];
   shouldRenderImages: boolean;
 }) {
-  const [previewVisible, setPreviewVisible] = useState(false);
-  const [previewIndex, setPreviewIndex] = useState(0);
+  const { openImagePreview } = useImagePreview();
 
-  const openPreview = useCallback((targetIndex: number) => {
-    setPreviewIndex(targetIndex);
-    setPreviewVisible(true);
-  }, []);
-
-  const closePreview = useCallback(() => {
-    setPreviewVisible(false);
-  }, []);
+  const openPreview = useCallback(
+    (targetIndex: number) => {
+      openImagePreview({
+        images,
+        initialIndex: targetIndex,
+      });
+    },
+    [images, openImagePreview],
+  );
 
   return (
-    <>
-      <FeedImageGrid
-        images={images}
-        shouldRenderImages={shouldRenderImages}
-        onPressImage={openPreview}
-      />
-
-      <ImagePreviewModal
-        visible={previewVisible}
-        images={images}
-        initialIndex={previewIndex}
-        onClose={closePreview}
-      />
-    </>
+    <FeedImageGrid
+      images={images}
+      shouldRenderImages={shouldRenderImages}
+      onPressImage={openPreview}
+    />
   );
 });
 

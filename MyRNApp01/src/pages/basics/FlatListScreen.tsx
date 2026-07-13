@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  Dimensions,
   FlatList,
   Platform,
   StyleSheet,
@@ -45,6 +46,8 @@ const SCREEN_POINTS = [
 
 const EXPOSURE_VISIBLE_THRESHOLD = 35;
 const EXPOSURE_STAY_MS = 300;
+const SMALL_ANDROID_HEIGHT = 780;
+const SMALL_ANDROID_WIDTH = 360;
 
 type ExposureState = {
   enteredAt: number;
@@ -85,6 +88,32 @@ export function FlatListScreen({ goBack }: ScreenProps) {
     successCount: 0,
     failureCount: 0,
   });
+
+  const listTuning = useMemo(() => {
+    const { width, height } = Dimensions.get('window');
+    const isAndroidLowTier =
+      Platform.OS === 'android' &&
+      (Math.min(width, height) <= SMALL_ANDROID_WIDTH ||
+        Math.max(width, height) <= SMALL_ANDROID_HEIGHT);
+
+    if (isAndroidLowTier) {
+      return {
+        tierLabel: 'Android Low Tier',
+        initialNumToRender: 4,
+        maxToRenderPerBatch: 2,
+        windowSize: 3,
+        updateCellsBatchingPeriod: 80,
+      };
+    }
+
+    return {
+      tierLabel: Platform.OS === 'android' ? 'Android Default' : 'iOS Default',
+      initialNumToRender: 6,
+      maxToRenderPerBatch: 4,
+      windowSize: 5,
+      updateCellsBatchingPeriod: 60,
+    };
+  }, []);
 
   const currentPageRef = useRef(1);
   const refreshingRef = useRef(false);
@@ -460,6 +489,7 @@ export function FlatListScreen({ goBack }: ScreenProps) {
           <MetricPill label="Exposed" value={stats.exposureCount} />
           <MetricPill label="Requests" value={stats.requestCount} />
           <MetricPill label="ReqFail" value={stats.failureCount} />
+          <MetricPill label="ListTier" value={listTuning.tierLabel} />
           <MetricPill
             label="ScreenRender"
             value={screenRenderCountRef.current}
@@ -489,10 +519,10 @@ export function FlatListScreen({ goBack }: ScreenProps) {
           onRefresh={onRefresh}
           onEndReachedThreshold={0.4}
           onEndReached={onEndReached}
-          initialNumToRender={6}
-          maxToRenderPerBatch={4}
-          windowSize={5}
-          updateCellsBatchingPeriod={60}
+          initialNumToRender={listTuning.initialNumToRender}
+          maxToRenderPerBatch={listTuning.maxToRenderPerBatch}
+          windowSize={listTuning.windowSize}
+          updateCellsBatchingPeriod={listTuning.updateCellsBatchingPeriod}
           removeClippedSubviews={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}
           viewabilityConfig={viewabilityConfig.current}
