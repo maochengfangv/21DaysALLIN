@@ -1,0 +1,847 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		3BEE6151962EDFEC92693C41 /* libPods-IOSRNContainer-IOSRNContainerUITests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F770856322E8F220DA5ACDA /* libPods-IOSRNContainer-IOSRNContainerUITests.a */; };
+		57786C2CF5C707F06B9B0409 /* libPods-IOSRNContainer.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 56E8F9B74419EC26A2E0933D /* libPods-IOSRNContainer.a */; };
+		8827E8ED4BCB42A879865BAA /* NativeColoredView.mm in Sources */ = {isa = PBXBuildFile; fileRef = 42987B3B769CAED76C76AE46 /* NativeColoredView.mm */; };
+		976FCA9880BE39B79B497E83 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 3240F38AD62B243486B7B5BC /* PrivacyInfo.xcprivacy */; };
+		97D182E6064D79AB0F424A7B /* CounterTurboModule.mm in Sources */ = {isa = PBXBuildFile; fileRef = 6C28BAC25865A8F6EFCB54A6 /* CounterTurboModule.mm */; };
+		B2CA9388D85CE524C8ABC1E3 /* libPods-IOSRNContainerTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 24A6C24E6585EEEED81B281A /* libPods-IOSRNContainerTests.a */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0C4FF7F130049ADB00B8BE6B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0C4FF7D230049AD600B8BE6B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C4FF7D930049AD600B8BE6B;
+			remoteInfo = IOSRNContainer;
+		};
+		0C4FF7FB30049ADB00B8BE6B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0C4FF7D230049AD600B8BE6B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C4FF7D930049AD600B8BE6B;
+			remoteInfo = IOSRNContainer;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0C4FF7DA30049AD600B8BE6B /* IOSRNContainer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IOSRNContainer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C4FF7F030049ADB00B8BE6B /* IOSRNContainerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IOSRNContainerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C4FF7FA30049ADB00B8BE6B /* IOSRNContainerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IOSRNContainerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0F770856322E8F220DA5ACDA /* libPods-IOSRNContainer-IOSRNContainerUITests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-IOSRNContainer-IOSRNContainerUITests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		24A6C24E6585EEEED81B281A /* libPods-IOSRNContainerTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-IOSRNContainerTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3240F38AD62B243486B7B5BC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		42987B3B769CAED76C76AE46 /* NativeColoredView.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = NativeColoredView.mm; sourceTree = "<group>"; };
+		50F5EB20AE567BBBB44F6949 /* Pods-IOSRNContainerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainerTests.release.xcconfig"; path = "Target Support Files/Pods-IOSRNContainerTests/Pods-IOSRNContainerTests.release.xcconfig"; sourceTree = "<group>"; };
+		53C1DAFD3C3ACBB9A26C7CD4 /* Pods-IOSRNContainer.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainer.debug.xcconfig"; path = "Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer.debug.xcconfig"; sourceTree = "<group>"; };
+		56E8F9B74419EC26A2E0933D /* libPods-IOSRNContainer.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-IOSRNContainer.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5B8A8F50384787B72F1C7AEC /* Pods-IOSRNContainer.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainer.release.xcconfig"; path = "Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer.release.xcconfig"; sourceTree = "<group>"; };
+		6C28BAC25865A8F6EFCB54A6 /* CounterTurboModule.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = CounterTurboModule.mm; sourceTree = "<group>"; };
+		6FCB0D4011C87B6C8E9B903A /* CounterTurboModule.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = CounterTurboModule.h; sourceTree = "<group>"; };
+		A99B43B8CAB7ACAD3DDEA03D /* Pods-IOSRNContainerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainerTests.debug.xcconfig"; path = "Target Support Files/Pods-IOSRNContainerTests/Pods-IOSRNContainerTests.debug.xcconfig"; sourceTree = "<group>"; };
+		B68F8ABA5AB8B60391C5339C /* NativeColoredView.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = NativeColoredView.h; sourceTree = "<group>"; };
+		BA5553FE3438688C23E6DF7F /* Pods-IOSRNContainer-IOSRNContainerUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainer-IOSRNContainerUITests.release.xcconfig"; path = "Target Support Files/Pods-IOSRNContainer-IOSRNContainerUITests/Pods-IOSRNContainer-IOSRNContainerUITests.release.xcconfig"; sourceTree = "<group>"; };
+		C596C3F304F1F1B1EB95CB5B /* Pods-IOSRNContainer-IOSRNContainerUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainer-IOSRNContainerUITests.debug.xcconfig"; path = "Target Support Files/Pods-IOSRNContainer-IOSRNContainerUITests/Pods-IOSRNContainer-IOSRNContainerUITests.debug.xcconfig"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0C4FF80230049ADB00B8BE6B /* Exceptions for "IOSRNContainer" folder in "IOSRNContainer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0C4FF7D930049AD600B8BE6B /* IOSRNContainer */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		0C4FF7DC30049AD600B8BE6B /* IOSRNContainer */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0C4FF80230049ADB00B8BE6B /* Exceptions for "IOSRNContainer" folder in "IOSRNContainer" target */,
+			);
+			path = IOSRNContainer;
+			sourceTree = "<group>";
+		};
+		0C4FF7F330049ADB00B8BE6B /* IOSRNContainerTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = IOSRNContainerTests;
+			sourceTree = "<group>";
+		};
+		0C4FF7FD30049ADB00B8BE6B /* IOSRNContainerUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = IOSRNContainerUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0C4FF7D730049AD600B8BE6B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				57786C2CF5C707F06B9B0409 /* libPods-IOSRNContainer.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C4FF7ED30049ADB00B8BE6B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B2CA9388D85CE524C8ABC1E3 /* libPods-IOSRNContainerTests.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C4FF7F730049ADB00B8BE6B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3BEE6151962EDFEC92693C41 /* libPods-IOSRNContainer-IOSRNContainerUITests.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0C4FF7D130049AD600B8BE6B = {
+			isa = PBXGroup;
+			children = (
+				0C4FF7DC30049AD600B8BE6B /* IOSRNContainer */,
+				0C4FF7F330049ADB00B8BE6B /* IOSRNContainerTests */,
+				0C4FF7FD30049ADB00B8BE6B /* IOSRNContainerUITests */,
+				0C4FF7DB30049AD600B8BE6B /* Products */,
+				A0D198276AFEC57B86AA5F69 /* Pods */,
+				A7BC0E990EC3576D30925247 /* Frameworks */,
+				3240F38AD62B243486B7B5BC /* PrivacyInfo.xcprivacy */,
+				8D13F4CD7BD484A9688738C2 /* IOSRNModule */,
+			);
+			sourceTree = "<group>";
+		};
+		0C4FF7DB30049AD600B8BE6B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0C4FF7DA30049AD600B8BE6B /* IOSRNContainer.app */,
+				0C4FF7F030049ADB00B8BE6B /* IOSRNContainerTests.xctest */,
+				0C4FF7FA30049ADB00B8BE6B /* IOSRNContainerUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		8D13F4CD7BD484A9688738C2 /* IOSRNModule */ = {
+			isa = PBXGroup;
+			children = (
+				6FCB0D4011C87B6C8E9B903A /* CounterTurboModule.h */,
+				B68F8ABA5AB8B60391C5339C /* NativeColoredView.h */,
+				6C28BAC25865A8F6EFCB54A6 /* CounterTurboModule.mm */,
+				42987B3B769CAED76C76AE46 /* NativeColoredView.mm */,
+			);
+			name = IOSRNModule;
+			path = ./IOSRNModule;
+			sourceTree = "<group>";
+		};
+		A0D198276AFEC57B86AA5F69 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				53C1DAFD3C3ACBB9A26C7CD4 /* Pods-IOSRNContainer.debug.xcconfig */,
+				5B8A8F50384787B72F1C7AEC /* Pods-IOSRNContainer.release.xcconfig */,
+				C596C3F304F1F1B1EB95CB5B /* Pods-IOSRNContainer-IOSRNContainerUITests.debug.xcconfig */,
+				BA5553FE3438688C23E6DF7F /* Pods-IOSRNContainer-IOSRNContainerUITests.release.xcconfig */,
+				A99B43B8CAB7ACAD3DDEA03D /* Pods-IOSRNContainerTests.debug.xcconfig */,
+				50F5EB20AE567BBBB44F6949 /* Pods-IOSRNContainerTests.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		A7BC0E990EC3576D30925247 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				56E8F9B74419EC26A2E0933D /* libPods-IOSRNContainer.a */,
+				0F770856322E8F220DA5ACDA /* libPods-IOSRNContainer-IOSRNContainerUITests.a */,
+				24A6C24E6585EEEED81B281A /* libPods-IOSRNContainerTests.a */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0C4FF7D930049AD600B8BE6B /* IOSRNContainer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0C4FF80330049ADB00B8BE6B /* Build configuration list for PBXNativeTarget "IOSRNContainer" */;
+			buildPhases = (
+				0C756B484E96CF8D8BEF4912 /* [CP] Check Pods Manifest.lock */,
+				0C4FF7D630049AD600B8BE6B /* Sources */,
+				0C4FF7D730049AD600B8BE6B /* Frameworks */,
+				0C4FF7D830049AD600B8BE6B /* Resources */,
+				0735AF35AF64CE08A3923ECA /* [CP] Embed Pods Frameworks */,
+				0FCF249F3BABFE64F5FFFA72 /* [CP] Copy Pods Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0C4FF7DC30049AD600B8BE6B /* IOSRNContainer */,
+			);
+			name = IOSRNContainer;
+			productName = IOSRNContainer;
+			productReference = 0C4FF7DA30049AD600B8BE6B /* IOSRNContainer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		0C4FF7EF30049ADB00B8BE6B /* IOSRNContainerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0C4FF80830049ADB00B8BE6B /* Build configuration list for PBXNativeTarget "IOSRNContainerTests" */;
+			buildPhases = (
+				AD47B9CE00889C2835490C0E /* [CP] Check Pods Manifest.lock */,
+				0C4FF7EC30049ADB00B8BE6B /* Sources */,
+				0C4FF7ED30049ADB00B8BE6B /* Frameworks */,
+				0C4FF7EE30049ADB00B8BE6B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0C4FF7F230049ADB00B8BE6B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0C4FF7F330049ADB00B8BE6B /* IOSRNContainerTests */,
+			);
+			name = IOSRNContainerTests;
+			productName = IOSRNContainerTests;
+			productReference = 0C4FF7F030049ADB00B8BE6B /* IOSRNContainerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		0C4FF7F930049ADB00B8BE6B /* IOSRNContainerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0C4FF80B30049ADB00B8BE6B /* Build configuration list for PBXNativeTarget "IOSRNContainerUITests" */;
+			buildPhases = (
+				E90D16F3397D50075FD89846 /* [CP] Check Pods Manifest.lock */,
+				0C4FF7F630049ADB00B8BE6B /* Sources */,
+				0C4FF7F730049ADB00B8BE6B /* Frameworks */,
+				0C4FF7F830049ADB00B8BE6B /* Resources */,
+				20BF19CA99354B06B1A7BB65 /* [CP] Embed Pods Frameworks */,
+				A6FE45A96C7A66AF6455D001 /* [CP] Copy Pods Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0C4FF7FC30049ADB00B8BE6B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0C4FF7FD30049ADB00B8BE6B /* IOSRNContainerUITests */,
+			);
+			name = IOSRNContainerUITests;
+			productName = IOSRNContainerUITests;
+			productReference = 0C4FF7FA30049ADB00B8BE6B /* IOSRNContainerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0C4FF7D230049AD600B8BE6B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					0C4FF7D930049AD600B8BE6B = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					0C4FF7EF30049ADB00B8BE6B = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 0C4FF7D930049AD600B8BE6B;
+					};
+					0C4FF7F930049ADB00B8BE6B = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 0C4FF7D930049AD600B8BE6B;
+					};
+				};
+			};
+			buildConfigurationList = 0C4FF7D530049AD600B8BE6B /* Build configuration list for PBXProject "IOSRNContainer" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 0C4FF7D130049AD600B8BE6B;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 0C4FF7DB30049AD600B8BE6B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0C4FF7D930049AD600B8BE6B /* IOSRNContainer */,
+				0C4FF7EF30049ADB00B8BE6B /* IOSRNContainerTests */,
+				0C4FF7F930049ADB00B8BE6B /* IOSRNContainerUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0C4FF7D830049AD600B8BE6B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				976FCA9880BE39B79B497E83 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C4FF7EE30049ADB00B8BE6B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C4FF7F830049ADB00B8BE6B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		0735AF35AF64CE08A3923ECA /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		0C756B484E96CF8D8BEF4912 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-IOSRNContainer-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		0FCF249F3BABFE64F5FFFA72 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		20BF19CA99354B06B1A7BB65 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer-IOSRNContainerUITests/Pods-IOSRNContainer-IOSRNContainerUITests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer-IOSRNContainerUITests/Pods-IOSRNContainer-IOSRNContainerUITests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer-IOSRNContainerUITests/Pods-IOSRNContainer-IOSRNContainerUITests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A6FE45A96C7A66AF6455D001 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer-IOSRNContainerUITests/Pods-IOSRNContainer-IOSRNContainerUITests-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer-IOSRNContainerUITests/Pods-IOSRNContainer-IOSRNContainerUITests-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-IOSRNContainer-IOSRNContainerUITests/Pods-IOSRNContainer-IOSRNContainerUITests-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		AD47B9CE00889C2835490C0E /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-IOSRNContainerTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		E90D16F3397D50075FD89846 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-IOSRNContainer-IOSRNContainerUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0C4FF7D630049AD600B8BE6B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97D182E6064D79AB0F424A7B /* CounterTurboModule.mm in Sources */,
+				8827E8ED4BCB42A879865BAA /* NativeColoredView.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C4FF7EC30049ADB00B8BE6B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C4FF7F630049ADB00B8BE6B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0C4FF7F230049ADB00B8BE6B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0C4FF7D930049AD600B8BE6B /* IOSRNContainer */;
+			targetProxy = 0C4FF7F130049ADB00B8BE6B /* PBXContainerItemProxy */;
+		};
+		0C4FF7FC30049ADB00B8BE6B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0C4FF7D930049AD600B8BE6B /* IOSRNContainer */;
+			targetProxy = 0C4FF7FB30049ADB00B8BE6B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0C4FF80430049ADB00B8BE6B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 53C1DAFD3C3ACBB9A26C7CD4 /* Pods-IOSRNContainer.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = IOSRNContainer/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lc++",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.IOSRNContainer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0C4FF80530049ADB00B8BE6B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5B8A8F50384787B72F1C7AEC /* Pods-IOSRNContainer.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = IOSRNContainer/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lc++",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.IOSRNContainer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		0C4FF80630049ADB00B8BE6B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"${PODS_ROOT}/ReactCommon",
+					"${PODS_ROOT}/ReactCommon/react/nativemodule/core",
+					"${PODS_ROOT}/React-runtimeexecutor",
+					"${PODS_ROOT}/React-runtimeexecutor/platform/ios",
+					"${PODS_ROOT}/ReactCommon-Samples",
+					"${PODS_ROOT}/ReactCommon-Samples/platform/ios",
+					"${PODS_ROOT}/React-Fabric/react/renderer/components/view/platform/cxx",
+					"${PODS_ROOT}/React-NativeModulesApple",
+					"${PODS_ROOT}/React-graphics",
+					"${PODS_ROOT}/React-graphics/react/renderer/graphics/platform/ios",
+					"${PODS_ROOT}/React-featureflags",
+					"${PODS_ROOT}/React-renderercss",
+					"${PODS_ROOT}/Headers/Public/ReactCodegen",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				PODFILE_DIR = "$(SRCROOT)";
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../MyRNModule/node_modules/react-native";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				USE_HERMES = true;
+			};
+			name = Debug;
+		};
+		0C4FF80730049ADB00B8BE6B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"${PODS_ROOT}/ReactCommon",
+					"${PODS_ROOT}/ReactCommon/react/nativemodule/core",
+					"${PODS_ROOT}/React-runtimeexecutor",
+					"${PODS_ROOT}/React-runtimeexecutor/platform/ios",
+					"${PODS_ROOT}/ReactCommon-Samples",
+					"${PODS_ROOT}/ReactCommon-Samples/platform/ios",
+					"${PODS_ROOT}/React-Fabric/react/renderer/components/view/platform/cxx",
+					"${PODS_ROOT}/React-NativeModulesApple",
+					"${PODS_ROOT}/React-graphics",
+					"${PODS_ROOT}/React-graphics/react/renderer/graphics/platform/ios",
+					"${PODS_ROOT}/React-featureflags",
+					"${PODS_ROOT}/React-renderercss",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				PODFILE_DIR = "$(SRCROOT)";
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../MyRNModule/node_modules/react-native";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				USE_HERMES = true;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		0C4FF80930049ADB00B8BE6B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A99B43B8CAB7ACAD3DDEA03D /* Pods-IOSRNContainerTests.debug.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.IOSRNContainerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IOSRNContainer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/IOSRNContainer";
+			};
+			name = Debug;
+		};
+		0C4FF80A30049ADB00B8BE6B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 50F5EB20AE567BBBB44F6949 /* Pods-IOSRNContainerTests.release.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.IOSRNContainerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IOSRNContainer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/IOSRNContainer";
+			};
+			name = Release;
+		};
+		0C4FF80C30049ADB00B8BE6B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C596C3F304F1F1B1EB95CB5B /* Pods-IOSRNContainer-IOSRNContainerUITests.debug.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.IOSRNContainerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = IOSRNContainer;
+			};
+			name = Debug;
+		};
+		0C4FF80D30049ADB00B8BE6B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BA5553FE3438688C23E6DF7F /* Pods-IOSRNContainer-IOSRNContainerUITests.release.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.IOSRNContainerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = IOSRNContainer;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0C4FF7D530049AD600B8BE6B /* Build configuration list for PBXProject "IOSRNContainer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C4FF80630049ADB00B8BE6B /* Debug */,
+				0C4FF80730049ADB00B8BE6B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0C4FF80330049ADB00B8BE6B /* Build configuration list for PBXNativeTarget "IOSRNContainer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C4FF80430049ADB00B8BE6B /* Debug */,
+				0C4FF80530049ADB00B8BE6B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0C4FF80830049ADB00B8BE6B /* Build configuration list for PBXNativeTarget "IOSRNContainerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C4FF80930049ADB00B8BE6B /* Debug */,
+				0C4FF80A30049ADB00B8BE6B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0C4FF80B30049ADB00B8BE6B /* Build configuration list for PBXNativeTarget "IOSRNContainerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C4FF80C30049ADB00B8BE6B /* Debug */,
+				0C4FF80D30049ADB00B8BE6B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 0C4FF7D230049AD600B8BE6B /* Project object */;
+}

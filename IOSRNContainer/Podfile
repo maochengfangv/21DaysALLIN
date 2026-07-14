@@ -1,0 +1,56 @@
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', File.expand_path('../MyRNModule', __dir__)]).strip
+
+# === New Architecture (TurboModule + Fabric) 开关 ===
+# RN 0.76+ 默认启用 New Architecture，此处显式声明确保一致
+ENV['RCT_NEW_ARCH_ENABLED'] = '1'
+ENV['USE_FRAMEWORKS'] = 'static'
+
+platform :ios, '18.2'
+prepare_react_native_project!
+
+rn_app_path = File.expand_path('../MyRNModule', __dir__)
+rn_node_modules_path = File.join(rn_app_path, 'node_modules')
+rn_react_native_path = File.join(rn_node_modules_path, 'react-native')
+
+target 'IOSRNContainer' do
+  use_react_native!(
+    :path => rn_react_native_path,
+    :app_path => rn_app_path
+  )
+  pod 'react-native-safe-area-context', :path => File.join(rn_node_modules_path, 'react-native-safe-area-context')
+
+  target 'IOSRNContainerTests' do
+    inherit! :search_paths
+  end
+
+  target 'IOSRNContainerUITests' do
+  end
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      rn_react_native_path,
+      :mac_catalyst_enabled => false
+    )
+
+    # === 自动注入 ReactCodegen header 搜索路径 ===
+    # 让 IOSRNContainer target 可以 #import <MyRNAppSpecs/MyRNAppSpecs.h>
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.user_project.targets.each do |target|
+        next unless target.name == 'IOSRNContainer'
+        target.build_configurations.each do |config|
+          paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
+          codegen_path = '${PODS_ROOT}/Headers/Public/ReactCodegen'
+          unless paths.include?(codegen_path)
+            paths << codegen_path
+          end
+          config.build_settings['HEADER_SEARCH_PATHS'] = paths
+        end
+      end
+    end
+  end
+end
