@@ -11,7 +11,8 @@ import com.facebook.react.uimanager.ViewManager
 class MyRNPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
         return listOf(
-            CounterTurboModule(reactContext)
+            CounterTurboModule(reactContext),
+            HotUpdateBridgeModule(reactContext)
         )
     }
 

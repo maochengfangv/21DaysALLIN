@@ -10,6 +10,13 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 class MainApplication : Application(), ReactApplication {
 
   override val reactHost: ReactHost by lazy {
+    val initialBundlePath =
+      if (BuildConfig.DEBUG) {
+        null
+      } else {
+        HotUpdateBundleStore.getCurrentBundlePath(applicationContext)
+      }
+
     getDefaultReactHost(
       context = applicationContext,
       packageList =
@@ -17,6 +24,7 @@ class MainApplication : Application(), ReactApplication {
           // 注册自定义 Turbo Module / Fabric Component Package
           add(MyRNPackage())
         },
+      jsBundleFilePath = initialBundlePath,
     )
   }
 

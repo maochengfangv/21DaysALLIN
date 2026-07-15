@@ -1,41 +1,68 @@
 package com.myrnmodule
 
-import android.content.Context
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.view.View
-import com.facebook.react.uimanager.BaseViewManager
-import com.facebook.react.uimanager.LayoutShadowNode
+import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
-import com.facebook.react.uimanager.annotations.ReactProp
+import com.facebook.react.uimanager.ViewManagerDelegate
+import com.facebook.react.viewmanagers.NativeColoredViewManagerDelegate
+import com.facebook.react.viewmanagers.NativeColoredViewManagerInterface
+
+class ColoredView(context: ThemedReactContext) : View(context) {
+    private val backgroundDrawable = GradientDrawable()
+    private var fillColor: Int = Color.TRANSPARENT
+    private var radius: Float = 0f
+
+    init {
+        background = backgroundDrawable
+        refreshBackground()
+    }
+
+    fun updateColor(colorString: String?) {
+        fillColor = try {
+            if (colorString.isNullOrBlank()) Color.TRANSPARENT else Color.parseColor(colorString)
+        } catch (_: IllegalArgumentException) {
+            Color.TRANSPARENT
+        }
+        refreshBackground()
+    }
+
+    fun updateCornerRadius(nextRadius: Double) {
+        radius = nextRadius.toFloat()
+        refreshBackground()
+    }
+
+    private fun refreshBackground() {
+        backgroundDrawable.cornerRadius = radius
+        backgroundDrawable.setColor(fillColor)
+    }
+}
 
 /**
  * Fabric Native Component: NativeColoredView (Android)
  * 支持 color 和 cornerRadius 属性
  */
-class ColoredViewManager : BaseViewManager<View, LayoutShadowNode>() {
+class ColoredViewManager :
+    SimpleViewManager<ColoredView>(),
+    NativeColoredViewManagerInterface<ColoredView> {
+
+    private val delegate: ViewManagerDelegate<ColoredView> =
+        NativeColoredViewManagerDelegate(this)
 
     override fun getName(): String = "NativeColoredView"
 
-    override fun createViewInstance(context: ThemedReactContext): View {
-        return View(context)
+    override fun getDelegate(): ViewManagerDelegate<ColoredView> = delegate
+
+    override fun createViewInstance(context: ThemedReactContext): ColoredView {
+        return ColoredView(context)
     }
 
-    override fun getShadowNodeClass(): Class<out LayoutShadowNode> = LayoutShadowNode::class.java
-
-    @ReactProp(name = "color", customType = "Color")
-    fun setColor(view: View, color: Int?) {
-        if (color != null) {
-            view.setBackgroundColor(color)
-        }
+    override fun setColor(view: ColoredView, value: String?) {
+        view.updateColor(value)
     }
 
-    @ReactProp(name = "cornerRadius", defaultFloat = 0f)
-    fun setCornerRadius(view: View, radius: Float) {
-        view.clipToOutline = true
-        view.outlineProvider = object : android.view.ViewOutlineProvider() {
-            override fun getOutline(view: View, outline: android.graphics.Outline) {
-                outline.setRoundRect(0, 0, view.width, view.height, radius)
-            }
-        }
+    override fun setCornerRadius(view: ColoredView, value: Double) {
+        view.updateCornerRadius(value)
     }
 }

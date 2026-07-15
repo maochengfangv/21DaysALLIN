@@ -7,6 +7,15 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+// 热更新模块懒加载：避免依赖链中任何模块加载失败导致 App 无法注册
+let HotUpdateManager: React.ComponentType<any> | null = null;
+let HotUpdateService: any = null;
+try {
+  HotUpdateManager = require('./src/components/HotUpdateManager').default;
+  HotUpdateService = require('./src/services/hot-update/HotUpdateService').default;
+} catch (e) {
+  console.warn('[App] 热更新模块加载失败，热更新功能不可用:', e);
+}
 
 // ==================== 错误边界 ====================
 
@@ -60,10 +69,37 @@ try {
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
+  useEffect(() => {
+    let mounted = true;
+
+    const bootstrapHotUpdate = async () => {
+      if (!HotUpdateService) {
+        return;
+      }
+      try {
+        await HotUpdateService.initialize();
+        if (!mounted) {
+          return;
+        }
+        await HotUpdateService.markApplicationReady();
+        await HotUpdateService.autoCheckForUpdate();
+      } catch (error) {
+        console.error('[HotUpdate]', error);
+      }
+    };
+
+    bootstrapHotUpdate();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <View style={[styles.container, { paddingTop: 60 }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <Text style={styles.title}>TurboModule + Fabric Demo</Text>
+      {HotUpdateManager ? <HotUpdateManager /> : null}
       <ErrorBoundary name="TurboModule">
         <CounterDemo />
       </ErrorBoundary>

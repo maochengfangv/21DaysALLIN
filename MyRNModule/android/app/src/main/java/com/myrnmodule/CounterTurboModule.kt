@@ -1,6 +1,5 @@
 package com.myrnmodule
 
-import com.facebook.fbreact.specs.NativeCounterSpec
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 
