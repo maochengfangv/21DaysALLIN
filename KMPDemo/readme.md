@@ -1,14 +1,158 @@
-# KMP Demo - iOS 集成踩坑记录
+# KMP Demo — Kotlin Multiplatform 跨平台实践
+
+## 项目概述
+
+使用 Kotlin Multiplatform (KMP) 搭建 **expect/actual 共享模块**，在 Android 和 iOS 双端复用业务逻辑。重点记录了 iOS 端集成过程中遇到的 **5 大典型陷阱** 及解决方案，并输出 **5 步配置 Checklist**，可直接作为团队 KMP 接入文档。
 
 ## 项目结构
 
 ```
 KMPDemo/
-├── shared/          # KMP 共享模块 (expect/actual)
-├── androidApp/      # Android 宿主
-├── iosApp/          # iOS 宿主 (Xcode project)
+├── shared/                          # KMP 共享模块
+│   ├── src/
+│   │   ├── commonMain/              # 跨平台公共代码
+│   │   │   └── kotlin/.../
+│   │   │       └── Greeting.kt      # expect 声明 + 共享业务逻辑
+│   │   ├── androidMain/             # Android actual 实现
+│   │   │   └── kotlin/.../
+│   │   │       └── Platform.android.kt
+│   │   └── iosMain/                 # iOS actual 实现
+│   │       └── kotlin/.../
+│   │           └── Platform.ios.kt
+│   └── build.gradle.kts             # KMP Gradle 配置（多目标 + Framework 导出）
+├── androidApp/                      # Android 宿主 App
+├── iosApp/                          # iOS 宿主 App（SwiftUI + Xcode 工程）
+├── gradle/
+│   └── libs.versions.toml           # 版本目录（Kotlin 2.0.21, AGP 8.5.2）
+├── settings.gradle.kts
 └── readme.md
 ```
+
+## 架构概览
+
+```
+┌──────────────────────────────────────────────┐
+│               commonMain (共享)                │
+│  expect fun getPlatformName(): String        │
+│  class Greeting { greet() }                   │
+│  ↓ 编译为 ↓                                    │
+├──────────────────┬───────────────────────────┤
+│   androidMain    │       iosMain             │
+│  actual fun      │  actual fun               │
+│  → "Android 34"  │  → UIDevice.current       │
+│  → .jar/.aar     │  → shared.framework       │
+└──────────────────┴───────────────────────────┘
+           ↓                     ↓
+    androidApp/              iosApp/
+  MainActivity.kt         ContentView.swift
+  (Kotlin/JVM)            (SwiftUI + import shared)
+```
+
+---
+
+## 技术要点
+
+### 一、expect/actual 模式
+
+**commonMain 声明接口：**
+
+```kotlin
+// shared/src/commonMain/.../Greeting.kt
+expect fun getPlatformName(): String  // 声明：每个平台必须提供实现
+
+class Greeting {
+    private val platform: String = getPlatformName()
+
+    fun greet(): String = "Hello from KMP on $platform"
+}
+```
+
+**Android actual 实现：**
+
+```kotlin
+// shared/src/androidMain/.../Platform.android.kt
+actual fun getPlatformName(): String = "Android ${android.os.Build.VERSION.SDK_INT}"
+```
+
+**iOS actual 实现：**
+
+```kotlin
+// shared/src/iosMain/.../Platform.ios.kt
+import platform.UIKit.UIDevice
+
+actual fun getPlatformName(): String =
+    "${UIDevice.currentDevice.systemName} ${UIDevice.currentDevice.systemVersion}"
+```
+
+**iOS 侧 SwiftUI 调用：**
+
+```swift
+import shared  // KMP 导出的 Framework
+
+struct ContentView: View {
+    var body: some View {
+        Text(Greeting().greet())  // "Hello from KMP on iOS 18.2"
+    }
+}
+```
+
+**关键设计原则：**
+- `expect` 声明在 `commonMain`，定义跨平台接口契约
+- `actual` 实现在各平台 SourceSet，各自调用平台原生 API
+- 共享业务逻辑（`Greeting` 类）完全写在 `commonMain`，不依赖平台
+- `platform.UIKit.UIDevice` 是 Kotlin/Native 自动映射的 iOS SDK API
+
+### 二、Gradle 多目标配置
+
+```kotlin
+// shared/build.gradle.kts
+kotlin {
+    androidTarget {
+        compilations.all {
+            compileTaskProvider.configure {
+                compilerOptions {
+                    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+                }
+            }
+        }
+    }
+
+    listOf(
+        iosX64(),                // Intel Mac 模拟器
+        iosArm64(),              // 真机
+        iosSimulatorArm64()      // Apple Silicon 模拟器
+    ).forEach {
+        it.binaries.framework {
+            baseName = "shared"  // 导出 Framework 名称
+            isStatic = true      // 静态库（默认）
+        }
+    }
+}
+```
+
+| 目标 | 用途 | Gradle Task |
+|------|------|-------------|
+| `androidTarget` | Android JVM | `:shared:compileDebugKotlinAndroid` |
+| `iosX64` | Intel Mac 模拟器 | `:shared:linkDebugFrameworkIosX64` |
+| `iosSimulatorArm64` | Apple Silicon 模拟器 | `:shared:linkDebugFrameworkIosSimulatorArm64` |
+| `iosArm64` | 真机 | `:shared:linkDebugFrameworkIosArm64` |
+
+### 三、版本依赖
+
+```toml
+# gradle/libs.versions.toml
+[versions]
+agp = "8.5.2"       # Android Gradle Plugin
+kotlin = "2.0.21"   # Kotlin Multiplatform
+
+[plugins]
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+androidApplication = { id = "com.android.application", version.ref = "agp" }
+androidLibrary = { id = "com.android.library", version.ref = "agp" }
+```
+
+---
 
 ## iOS 集成踩坑记录
 
@@ -93,16 +237,12 @@ Intel Mac 的模拟器运行在 **x86_64** 架构，而 KMP 默认编译的是 `
 
 **解决：**
 
-- Intel Mac：链接 `iosX64` 产物
-  ```
-  $(SRCROOT)/../shared/build/bin/iosX64/debugFramework
-  ```
-- Apple Silicon Mac：链接 `iosSimulatorArm64` 产物
-  ```
-  $(SRCROOT)/../shared/build/bin/iosSimulatorArm64/debugFramework
-  ```
+| Mac 类型 | Framework Search Paths | Run Script Gradle Task |
+|----------|----------------------|------------------------|
+| Intel Mac | `$(SRCROOT)/../shared/build/bin/iosX64/debugFramework` | `:shared:linkDebugFrameworkIosX64` |
+| Apple Silicon | `$(SRCROOT)/../shared/build/bin/iosSimulatorArm64/debugFramework` | `:shared:linkDebugFrameworkIosSimulatorArm64` |
 
-Run Script 中也对应修改：
+Run Script 中对应修改：
 ```bash
 # Intel Mac
 ./gradlew :shared:linkDebugFrameworkIosX64
@@ -123,7 +263,7 @@ The selected Xcode version (16.2) is higher than the maximum known to the Kotlin
 
 **解决：**
 
-在 `gradle.properties` 中添加或传入参数：
+在 `gradle.properties` 中添加：
 ```properties
 kotlin.apple.xcodeCompatibility.nowarn=true
 ```
@@ -146,7 +286,7 @@ kotlin.apple.xcodeCompatibility.nowarn=true
 
 ## 运行方式
 
-### Android（已验证）
+### Android
 
 ```bash
 cd KMPDemo
@@ -157,9 +297,23 @@ cd KMPDemo
 
 1. 确保已编译 iOS framework：
    ```bash
-   ./gradlew :shared:linkDebugFrameworkIosX64   # Intel Mac
-   # 或
-   ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64  # Apple Silicon
+   # Intel Mac
+   ./gradlew :shared:linkDebugFrameworkIosX64
+   # Apple Silicon
+   ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
    ```
 2. Xcode 打开 `iosApp/iosApp.xcodeproj`
 3. 选择 iOS Simulator，Run
+
+### 构建产物
+
+```
+shared/build/bin/
+├── iosX64/debugFramework/shared.framework/          # Intel Mac
+├── iosSimulatorArm64/debugFramework/shared.framework/ # Apple Silicon
+└── iosArm64/debugFramework/shared.framework/        # 真机
+```
+
+## 技术标签
+
+`Kotlin Multiplatform` `KMP` `expect/actual` `Kotlin/Native` `Gradle` `Xcode` `Static Framework` `XCFramework` `架构兼容性` `iosX64` `iosSimulatorArm64` `OTHER_LDFLAGS` `Framework Search Paths`
