@@ -172,12 +172,9 @@ function CounterDemo() {
 
 // ==================== Fabric Component: NativeColoredView ====================
 
-const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
-const RADIUS = [0, 12, 24];
-
 function FabricDemo() {
-  const [colorIdx, setColorIdx] = useState(0);
-  const [radiusIdx, setRadiusIdx] = useState(0);
+  const [liveValue, setLiveValue] = useState(0);
+  const [isActive, setIsActive] = useState(false);
 
   if (!NativeColoredView) {
     return (
@@ -195,26 +192,25 @@ function FabricDemo() {
       <Text style={styles.sectionTitle}>Fabric Component: NativeColoredView</Text>
 
       <ColoredView
-        color={COLORS[colorIdx]}
-        cornerRadius={RADIUS[radiusIdx]}
         style={styles.fabricBox}
+        color="#4F46E5"
+        cornerRadius={16}
+        isActive={isActive}
+        onValueChange={(event: any) => {
+          setLiveValue(event.nativeEvent.value);
+        }}
       />
 
-      <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={styles.btn}
-          onPress={() => setColorIdx((colorIdx + 1) % COLORS.length)}>
-          <Text style={styles.btnText}>换色</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.btn}
-          onPress={() => setRadiusIdx((radiusIdx + 1) % RADIUS.length)}>
-          <Text style={styles.btnText}>圆角: {RADIUS[radiusIdx]}</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[styles.btn, { marginBottom: 12 }]}
+        onPress={() => setIsActive(prev => !prev)}>
+        <Text style={styles.btnText}>
+          {isActive ? '停止推送' : '开始推送'}
+        </Text>
+      </TouchableOpacity>
 
-      <Text style={styles.hint}>
-        color={COLORS[colorIdx]}  cornerRadius={RADIUS[radiusIdx]}
+      <Text style={styles.liveValueText}>
+        当前原生值: {liveValue}
       </Text>
     </View>
   );
@@ -288,11 +284,11 @@ const styles = StyleSheet.create({
     height: 120,
     marginBottom: 12,
   },
-  hint: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#999',
-    fontFamily: 'Courier',
+  liveValueText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#4F46E5',
+    marginTop: 4,
   },
   errorBox: {
     marginHorizontal: 16,
