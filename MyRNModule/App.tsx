@@ -7,17 +7,22 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-// 热更新模块懒加载：避免依赖链中任何模块加载失败导致 App 无法注册
+import { businessDataHandler } from './src/services/business/BusinessDataHandler';
+import {
+  CALLBACK_IDS,
+  type CallbackId,
+  type ScenePayloadMap,
+} from './src/shared/businessConstants';
+
 let HotUpdateManager: React.ComponentType<any> | null = null;
 let HotUpdateService: any = null;
+
 try {
   HotUpdateManager = require('./src/components/HotUpdateManager').default;
   HotUpdateService = require('./src/services/hot-update/HotUpdateService').default;
-} catch (e) {
-  console.warn('[App] 热更新模块加载失败，热更新功能不可用:', e);
+} catch (error) {
+  console.warn('[App] 热更新模块加载失败，热更新功能不可用:', error);
 }
-
-// ==================== 错误边界 ====================
 
 class ErrorBoundary extends Component<
   { children: React.ReactNode; name: string },
@@ -41,30 +46,36 @@ class ErrorBoundary extends Component<
         </View>
       );
     }
+
     return this.props.children;
   }
 }
-
-// ==================== 安全导入 Native 模块 ====================
 
 let NativeCounter: any = null;
 let NativeColoredView: any = null;
 
 try {
   NativeCounter = require('./specs/NativeCounter').default;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
 } catch (_) {
-  // TurboModule 未注册，NativeCounter 保持 null
+  NativeCounter = null;
 }
 
 try {
   NativeColoredView = require('./specs/NativeColoredView').default;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
 } catch (_) {
-  // Fabric Component 未注册
+  NativeColoredView = null;
 }
 
-// ==================== 主入口 ====================
+type BusinessLogItem = {
+  callbackId: CallbackId;
+  payload: ScenePayloadMap[CallbackId];
+};
+
+const SCENE_TITLES: Record<CallbackId, string> = {
+  [CALLBACK_IDS.SCENE_A]: '场景 A',
+  [CALLBACK_IDS.SCENE_B]: '场景 B',
+  [CALLBACK_IDS.SCENE_C]: '场景 C',
+};
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -76,6 +87,7 @@ function App() {
       if (!HotUpdateService) {
         return;
       }
+
       try {
         await HotUpdateService.initialize();
         if (!mounted) {
@@ -98,10 +110,13 @@ function App() {
   return (
     <View style={[styles.container, { paddingTop: 60 }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <Text style={styles.title}>TurboModule + Fabric Demo</Text>
+      <Text style={styles.title}>TurboModule + Native Event + Fabric Demo</Text>
       {HotUpdateManager ? <HotUpdateManager /> : null}
       <ErrorBoundary name="TurboModule">
         <CounterDemo />
+      </ErrorBoundary>
+      <ErrorBoundary name="Native Event">
+        <BusinessDataDemo />
       </ErrorBoundary>
       <ErrorBoundary name="Fabric Component">
         <FabricDemo />
@@ -110,15 +125,16 @@ function App() {
   );
 }
 
-// ==================== TurboModule: NativeCounter ====================
-
 function CounterDemo() {
   const [count, setCount] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!NativeCounter) { return; }
-    const val = await NativeCounter.getValue();
-    setCount(val);
+    if (!NativeCounter) {
+      return;
+    }
+
+    const value = await NativeCounter.getValue();
+    setCount(value);
   }, []);
 
   useEffect(() => {
@@ -129,19 +145,21 @@ function CounterDemo() {
     return (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>TurboModule: NativeCounter</Text>
-        <Text style={styles.notReady}>原生模块未注册，请在 IOSRNContainer 中完成 codegen 并编译</Text>
+        <Text style={styles.notReady}>
+          原生模块未注册，请先在 `IOSRNContainer` 中编译运行。
+        </Text>
       </View>
     );
   }
 
   const handleIncrement = async () => {
-    const val = await NativeCounter.increment(1);
-    setCount(val);
+    const value = await NativeCounter.increment(1);
+    setCount(value);
   };
 
   const handleDecrement = async () => {
-    const val = await NativeCounter.decrement(1);
-    setCount(val);
+    const value = await NativeCounter.decrement(1);
+    setCount(value);
   };
 
   const handleReset = async () => {
@@ -170,7 +188,65 @@ function CounterDemo() {
   );
 }
 
-// ==================== Fabric Component: NativeColoredView ====================
+function BusinessDataDemo() {
+  const [logs, setLogs] = useState<BusinessLogItem[]>([]);
+
+  useEffect(() => {
+    const cleanups = [
+      businessDataHandler.register(CALLBACK_IDS.SCENE_A, payload => {
+        setLogs(prev => [
+          { callbackId: CALLBACK_IDS.SCENE_A, payload },
+          ...prev.slice(0, 4),
+        ]);
+      }),
+      businessDataHandler.register(CALLBACK_IDS.SCENE_B, payload => {
+        setLogs(prev => [
+          { callbackId: CALLBACK_IDS.SCENE_B, payload },
+          ...prev.slice(0, 4),
+        ]);
+      }),
+      businessDataHandler.register(CALLBACK_IDS.SCENE_C, payload => {
+        setLogs(prev => [
+          { callbackId: CALLBACK_IDS.SCENE_C, payload },
+          ...prev.slice(0, 4),
+        ]);
+      }),
+    ];
+
+    businessDataHandler.startListening();
+
+    return () => {
+      cleanups.forEach(cleanup => cleanup());
+      businessDataHandler.stopListening();
+      businessDataHandler.clear();
+    };
+  }, []);
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Native Event: BusinessData</Text>
+      <Text style={styles.hintSmall}>
+        固定 event name，通过 callbackId 路由多业务场景
+      </Text>
+      {logs.length === 0 ? (
+        <Text style={styles.notReady}>
+          点击原生页面右上角的「场景A / 场景B / 场景C」按钮触发数据推送
+        </Text>
+      ) : (
+        logs.map((item, index) => (
+          <View key={`${item.callbackId}-${index}`} style={styles.eventCard}>
+            <Text style={styles.eventTitle}>
+              {SCENE_TITLES[item.callbackId]} / {item.callbackId}
+            </Text>
+            <Text style={styles.eventPayload}>
+              {JSON.stringify(item.payload)}
+            </Text>
+          </View>
+        ))
+      )}
+    </View>
+  );
+}
 
 function FabricDemo() {
   const [liveValue, setLiveValue] = useState(0);
@@ -190,33 +266,24 @@ function FabricDemo() {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Fabric Component: NativeColoredView</Text>
-
       <ColoredView
         style={styles.fabricBox}
         color="#4F46E5"
         cornerRadius={16}
         isActive={isActive}
-        onValueChange={(event: any) => {
-          setLiveValue(event.nativeEvent.value);
+        onValueChange={(event: { nativeEvent: { value?: number } }) => {
+          setLiveValue(event.nativeEvent.value ?? 0);
         }}
       />
-
       <TouchableOpacity
-        style={[styles.btn, { marginBottom: 12 }]}
+        style={[styles.btn, styles.singleButton]}
         onPress={() => setIsActive(prev => !prev)}>
-        <Text style={styles.btnText}>
-          {isActive ? '停止推送' : '开始推送'}
-        </Text>
+        <Text style={styles.btnText}>{isActive ? '停止推送' : '开始推送'}</Text>
       </TouchableOpacity>
-
-      <Text style={styles.liveValueText}>
-        当前原生值: {liveValue}
-      </Text>
+      <Text style={styles.liveValueText}>当前原生值: {liveValue}</Text>
     </View>
   );
 }
-
-// ==================== 样式 ====================
 
 const styles = StyleSheet.create({
   container: {
@@ -279,6 +346,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  singleButton: {
+    marginBottom: 12,
+  },
   fabricBox: {
     width: 120,
     height: 120,
@@ -289,6 +359,29 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#4F46E5',
     marginTop: 4,
+  },
+  hintSmall: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  eventCard: {
+    width: '100%',
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#F4F7FF',
+  },
+  eventTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  eventPayload: {
+    fontSize: 12,
+    color: '#475569',
   },
   errorBox: {
     marginHorizontal: 16,

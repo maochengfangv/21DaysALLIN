@@ -38,13 +38,13 @@
 		0C4FF7FA30049ADB00B8BE6B /* IOSRNContainerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IOSRNContainerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F770856322E8F220DA5ACDA /* libPods-IOSRNContainer-IOSRNContainerUITests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-IOSRNContainer-IOSRNContainerUITests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		24A6C24E6585EEEED81B281A /* libPods-IOSRNContainerTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-IOSRNContainerTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		3240F38AD62B243486B7B5BC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		42987B3B769CAED76C76AE46 /* NativeColoredView.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = NativeColoredView.mm; sourceTree = "<group>"; };
+		3240F38AD62B243486B7B5BC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		42987B3B769CAED76C76AE46 /* NativeColoredView.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = NativeColoredView.mm; sourceTree = "<group>"; };
 		50F5EB20AE567BBBB44F6949 /* Pods-IOSRNContainerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainerTests.release.xcconfig"; path = "Target Support Files/Pods-IOSRNContainerTests/Pods-IOSRNContainerTests.release.xcconfig"; sourceTree = "<group>"; };
 		53C1DAFD3C3ACBB9A26C7CD4 /* Pods-IOSRNContainer.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainer.debug.xcconfig"; path = "Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer.debug.xcconfig"; sourceTree = "<group>"; };
 		56E8F9B74419EC26A2E0933D /* libPods-IOSRNContainer.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-IOSRNContainer.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B8A8F50384787B72F1C7AEC /* Pods-IOSRNContainer.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainer.release.xcconfig"; path = "Target Support Files/Pods-IOSRNContainer/Pods-IOSRNContainer.release.xcconfig"; sourceTree = "<group>"; };
-		6C28BAC25865A8F6EFCB54A6 /* CounterTurboModule.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = CounterTurboModule.mm; sourceTree = "<group>"; };
+		6C28BAC25865A8F6EFCB54A6 /* CounterTurboModule.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = CounterTurboModule.mm; sourceTree = "<group>"; };
 		6FCB0D4011C87B6C8E9B903A /* CounterTurboModule.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = CounterTurboModule.h; sourceTree = "<group>"; };
 		A99B43B8CAB7ACAD3DDEA03D /* Pods-IOSRNContainerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-IOSRNContainerTests.debug.xcconfig"; path = "Target Support Files/Pods-IOSRNContainerTests/Pods-IOSRNContainerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		B68F8ABA5AB8B60391C5339C /* NativeColoredView.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = NativeColoredView.h; sourceTree = "<group>"; };
@@ -73,15 +73,11 @@
 		};
 		0C4FF7F330049ADB00B8BE6B /* IOSRNContainerTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = IOSRNContainerTests;
 			sourceTree = "<group>";
 		};
 		0C4FF7FD30049ADB00B8BE6B /* IOSRNContainerUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = IOSRNContainerUITests;
 			sourceTree = "<group>";
 		};

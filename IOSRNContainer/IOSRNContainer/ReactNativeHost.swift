@@ -44,6 +44,13 @@ final class ReactNativeHost {
       launchOptions: cachedLaunchOptions
     )
   }
+
+  var bridge: RCTBridge? {
+    if let bridge = reactNativeFactory?.bridge {
+      return bridge
+    }
+    return reactNativeFactory?.rootViewFactory.bridge
+  }
 }
 
 final class ContainerReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
