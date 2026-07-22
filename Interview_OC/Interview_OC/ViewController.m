@@ -7,10 +7,12 @@
 
 #import "ViewController.h"
 #import "Person.h"
+#import "LogHelper.h"
+#import "Article.h" // 导入 Article 模型
+
 @interface ViewController ()
 
 @property (nonatomic, strong) Person *person;
-
 @property (nonatomic, strong) Person *kvoPerson;
 
 @end
@@ -19,22 +21,86 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    // Do any additional setup after loading the view.
-    self.person = [[Person alloc] initWithName:@"11" age:11];
+    
+    // 1. 创建 Person 实例
+    self.person = [[Person alloc] initWithName:@"张三" age:25];
+    
     // 2. 演示 KVC 的基本用法
     [self demonstrateBasicKVC];
     
-//    // 3. 演示字典与模型互转
-//    [self demonstrateDictionaryModelConversion];
-//    
-//    // 4. 演示动态赋值
-//    [self demonstrateDynamicAssignment];
-//        
-//    // 5. 演示操作私有成员变量
-//    [self demonstratePrivateVariableAccess];
-//        
-//    // 6. 演示配合 KVO 使用
-//    [self demonstrateKVOWithKVC];
+    // 3. 演示字典与模型互转
+    [self demonstrateDictionaryModelConversion];
+    
+    // 4. 演示动态赋值
+    [self demonstrateDynamicAssignment];
+    
+    // 5. 演示操作私有成员变量
+    [self demonstratePrivateVariableAccess];
+    
+    // 6. 演示配合 KVO 使用
+    [self demonstrateKVOWithKVC];
+    
+    // 7. 演示中文打印解决方案
+//    [self demonstrateChineseLogging];
+    
+    // 8. 演示纯 KVC 字典转模型的缺陷
+    [self demonstratePureKVCLimitations];
+}
+
+#pragma mark - 8. 演示纯 KVC 字典转模型的缺陷
+- (void)demonstratePureKVCLimitations {
+    NSLog(@"\n\n=== 8. 演示纯 KVC 字典转模型的缺陷 ===");
+    
+    NSDictionary *articleDict = @{
+        @"title": @"KVC 缺陷分析",
+        @"views": @12345,
+        @"book": @{ // 嵌套模型
+            @"bookName": @"Objective-C 编程之道",
+            @"price": @99
+        },
+        @"authors": @[ // 数组模型
+            @{ @"authorName": @"张三", @"age": @30 },
+            @{ @"authorName": @"李四", @"age": @35 }
+        ],
+        @"publishDate": @"2026-07-22", // 字符串日期
+        @"isHot": @"YES", // 字符串布尔值
+        @"unknownKey": @"这个键模型中没有", // 未定义 key
+        @"extraData": @{@"version": @"1.0"} // 多余的嵌套数据
+    };
+    
+    NSLog(@"\n--- 原始字典数据 ---");
+    [LogHelper prettyLogDictionary:articleDict label:@"原始 Article 字典"];
+    
+    // 尝试使用纯 KVC 进行转换
+    Article *article = [[Article alloc] init];
+    
+    @try {
+        [article setValuesForKeysWithDictionary:articleDict];
+        NSLog(@"\n--- 纯 KVC 转换结果 ---");
+        [LogHelper logObject:article withLabel:@"纯 KVC 转换后的 Article"];
+        
+        // 缺陷分析
+        NSLog(@"\n--- 纯 KVC 缺陷分析 ---");
+        NSLog(@"1. 嵌套模型 (book): 期望是 Book 对象，实际是 %@", [article.book class]);
+        NSLog(@"   KVC 无法自动将字典转换为嵌套模型对象。");
+        
+        NSLog(@"2. 数组模型 (authors): 期望是 Author 对象数组，实际是 %@", [article.authors.firstObject class]);
+        NSLog(@"   KVC 无法自动将字典数组转换为模型数组。");
+        
+        NSLog(@"3. 类型转换容错差 (views): 期望是 NSInteger，字典中是 NSNumber，KVC 自动处理了。");
+        NSLog(@"   类型转换容错差 (publishDate): 期望是 NSString，字典中是 NSString，KVC 自动处理了。");
+        NSLog(@"   类型转换容错差 (isHot): 期望是 BOOL，字典中是 NSString(\"YES\")，KVC 自动处理了。");
+        NSLog(@"   ⚠️ 注意：KVC 对基本类型和 NSString 之间有一定容错，但对于自定义对象类型则无能为力。");
+        
+        NSLog(@"4. 无 key 校验易崩溃: 字典中包含 'unknownKey' 和 'extraData'，但 Article 模型中没有。");
+        NSLog(@"   由于 Article 中实现了 setValue:forUndefinedKey:，所以这里没有崩溃，而是打印了警告。");
+        NSLog(@"   如果 Article 没有实现 setValue:forUndefinedKey:，这里会直接崩溃。");
+        
+    } @catch (NSException *exception) {
+        NSLog(@"\n--- 纯 KVC 转换发生异常 ---");
+        NSLog(@"异常信息: %@", exception);
+        NSLog(@"这通常发生在未实现 setValue:forUndefinedKey: 或类型转换失败时。");
+    }
 }
 
 #pragma mark - 1. KVC 基本用法
