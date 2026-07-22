@@ -24,17 +24,17 @@
     // 2. 演示 KVC 的基本用法
     [self demonstrateBasicKVC];
     
-    // 3. 演示字典与模型互转
-    [self demonstrateDictionaryModelConversion];
-    
-    // 4. 演示动态赋值
-    [self demonstrateDynamicAssignment];
-        
-    // 5. 演示操作私有成员变量
-    [self demonstratePrivateVariableAccess];
-        
-    // 6. 演示配合 KVO 使用
-    [self demonstrateKVOWithKVC];
+//    // 3. 演示字典与模型互转
+//    [self demonstrateDictionaryModelConversion];
+//    
+//    // 4. 演示动态赋值
+//    [self demonstrateDynamicAssignment];
+//        
+//    // 5. 演示操作私有成员变量
+//    [self demonstratePrivateVariableAccess];
+//        
+//    // 6. 演示配合 KVO 使用
+//    [self demonstrateKVOWithKVC];
 }
 
 #pragma mark - 1. KVC 基本用法
@@ -55,6 +55,15 @@
     NSString *address = [self.person valueForKeyPath:@"address"];
     
     NSLog(@"设置后: address=%@", address);
+    
+    [self.person setValue:@"设置只读内容" forKey:@"readOnlyStr"];
+    
+    NSString *readOnlyStr = [self.person valueForKeyPath:@"readOnlyStr"];
+    NSLog(@"设置后: readOnlyStr=%@", readOnlyStr);
+    
+    [self.person setValue:nil forKey:@"age"];
+    
+    NSLog(@"设置nil后: age=%@", [self.person valueForKey:@"age"]);
 }
 
 #pragma mark - 2. 字典与模型互转

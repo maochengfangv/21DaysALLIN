@@ -19,9 +19,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *address;
 @property (nonatomic, strong) NSMutableArray<NSString *> *hobbies;
 
+@property (nonatomic, readonly) NSString *readOnlyStr;
+
 - (instancetype)initWithName:(NSString *)name age:(NSInteger)age;
 
 @property (nonatomic, assign) NSInteger score;
+
+@property (nonatomic, strong) NSNumber *cc;
 
 @end
 

@@ -17,6 +17,8 @@
         _hobbies = [NSMutableArray array];
         _privateVar = @"初始私有值";
         _privateNumber = 100;
+        _readOnlyStr = @"初始化只读Str";
+        _cc = @99;
     }
     return  self;
 }
@@ -38,6 +40,14 @@
 - (id)valueForUndefinedKey:(NSString *)key {
     NSLog(@"警告: 尝试获取未定义的键 '%@'", key);
     return nil;
+}
+
+- (void)setNilValueForKey:(NSString *)key{
+    if ([key isEqualToString:@"age"]){
+        self.age = 0;
+    }else{
+        [super setNilValueForKey:key];
+    }
 }
 
 @end
