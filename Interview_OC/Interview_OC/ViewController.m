@@ -22,30 +22,172 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    // 1. 创建 Person 实例
-    self.person = [[Person alloc] initWithName:@"张三" age:25];
-    
-    // 2. 演示 KVC 的基本用法
-    [self demonstrateBasicKVC];
-    
-    // 3. 演示字典与模型互转
-    [self demonstrateDictionaryModelConversion];
-    
-    // 4. 演示动态赋值
-    [self demonstrateDynamicAssignment];
-    
-    // 5. 演示操作私有成员变量
-    [self demonstratePrivateVariableAccess];
-    
-    // 6. 演示配合 KVO 使用
-    [self demonstrateKVOWithKVC];
+    //    // 1. 创建 Person 实例
+    //    self.person = [[Person alloc] initWithName:@"张三" age:25];
+    //
+    //    // 2. 演示 KVC 的基本用法
+    //    [self demonstrateBasicKVC];
+    //
+    //    // 3. 演示字典与模型互转
+    //    [self demonstrateDictionaryModelConversion];
+    //
+    //    // 4. 演示动态赋值
+    //    [self demonstrateDynamicAssignment];
+    //
+    //    // 5. 演示操作私有成员变量
+    //    [self demonstratePrivateVariableAccess];
+    //
+    //    // 6. 演示配合 KVO 使用
+    //    [self demonstrateKVOWithKVC];
     
     // 7. 演示中文打印解决方案
-//    [self demonstrateChineseLogging];
+    //    [self demonstrateChineseLogging];
     
     // 8. 演示纯 KVC 字典转模型的缺陷
-    [self demonstratePureKVCLimitations];
+    //    [self demonstratePureKVCLimitations];
+//        [self shallowCopy];
+//    [self shallowMutlCopy];
+//    [self realDeepCopy];
+    
+//    [self  deepCopyWithMutableElements];
+    
+//    [self ress];
+//    [self subThreadDispatchAfter];
+//    [self subThreadTimer];
+    [self subThreadPerformSelector];
 }
+
+#pragma mark -  演示 容器类拷贝 浅拷贝
+
+- (void)shallowCopy {
+    NSArray *original = @[@"A",@"B",@"C"];
+    NSArray *shallowCopy = [original copy]; //新容器 元素指针相同
+    
+    // 容器地址不同
+    NSLog(@"容器地址: %p vs %p", original, shallowCopy);  //  相同
+    
+    // 元素地址相同
+    NSLog(@"元素地址: %p vs %p", original[0], shallowCopy[0]);  // 相同
+}
+
+#pragma mark -  演示 新可变容器，元素仍浅拷贝
+- (void)shallowMutlCopy {
+    
+    NSArray *original = @[@"A",@"B",@"C"];
+    NSMutableArray *mutableCopy = [original mutableCopy];
+    // 容器地址不同
+    NSLog(@"容器地址: %p vs %p", original, mutableCopy);  //  不相同
+    
+    // 元素地址相同
+    NSLog(@"元素地址: %p vs %p", original[0], mutableCopy[0]);  // 相同
+}
+
+- (void)realDeepCopy {
+    
+    NSArray *original = @[@"A",@"B",@"C"];
+    // 方法1：归档解档（要求元素实现 NSCoding 协议）
+    NSArray *deepCopy = [NSKeyedUnarchiver unarchiveObjectWithData:[NSKeyedArchiver archivedDataWithRootObject:original]];
+    // 方法2：使用 copyItems
+    NSArray *deepCopy1 = [[NSArray alloc] initWithArray:original copyItems:YES];
+    // 方法3：手动递归遍历
+    NSMutableArray *deepCopy2 = [NSMutableArray array];
+    for (id obj in original) {
+        [deepCopy2 addObject:[obj copy]];
+    }
+    
+    // 容器地址不同
+    NSLog(@"容器地址: %p VS deepCopy: %p VS deepCopy1: %p VS  deepCopy2:%p", original, deepCopy,deepCopy1,deepCopy2);  //  不相同
+    
+    // 元素地址相同
+    NSLog(@"元素地址: %p VS %p VS %p VS %p", original[0], deepCopy1[0], deepCopy1[0], deepCopy2[0]);  // 相同
+    
+}
+
+- (void)ress {
+    
+    NSString *str = @"A";
+    NSString *copied = [str copy];
+    NSLog(@"%p vs %p", str, copied);  // 相同！不可变对象 copy = retain
+}
+
+/**
+ * 不依赖 RunLoop，线程销毁不影响已入队的延迟 block；
+ * 底层基于 mach port 内核实现，稳定性高；
+ * 延迟到点后在指定队列异步执行。
+ */
+- (void)subThreadDispatchAfter {
+    dispatch_async(dispatch_get_global_queue(0, 0), ^{
+        NSLog(@"子线程开始");
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_global_queue(0, 0), ^{
+            NSLog(@"2秒延迟执行，依旧在子线程");
+        });
+    });
+    
+}
+
+- (void)subThreadTimer {
+    dispatch_async(dispatch_get_global_queue(0, 0), ^{
+        // 定时器加入DefaultMode，但线程执行完立刻销毁，RunLoop不存在
+        NSLog(@"子线程开始");
+        [NSTimer scheduledTimerWithTimeInterval:2 repeats:NO block:^(NSTimer * _Nonnull timer) {
+                NSLog(@"执行!!!");
+            }];
+        // 必须开启RunLoop保持线程存活
+        [[NSRunLoop currentRunLoop] run];
+    });
+}
+
+- (void)subThreadPerformSelector {
+    dispatch_async(dispatch_get_global_queue(0, 0), ^{
+        NSLog(@"子线程开始");
+        [self performSelector:@selector(delayFunc) withObject:self afterDelay:2];
+        // 必须开启RunLoop保持线程存活
+        [[NSRunLoop currentRunLoop] run];
+    });
+}
+
+- (void)delayFunc {
+    NSLog(@"执行!!!");
+}
+
+
+- (void)deepCopyWithMutableElements {
+    // 关键修改：元素改为 NSMutableString
+    NSMutableString *a = [NSMutableString stringWithString:@"A"];
+    NSMutableString *b = [NSMutableString stringWithString:@"B"];
+    NSMutableString *c = [NSMutableString stringWithString:@"C"];
+    
+    NSArray *original = @[a, b, c];
+    
+    // 方法1：归档解档
+    NSArray *deepCopy = [NSKeyedUnarchiver unarchiveObjectWithData:
+                         [NSKeyedArchiver archivedDataWithRootObject:original]];
+    
+    // 方法2：copyItems:YES
+    NSArray *deepCopy1 = [[NSArray alloc] initWithArray:original copyItems:YES];
+    
+    // 方法3：手动递归遍历
+    NSMutableArray *deepCopy2 = [NSMutableArray array];
+    for (id obj in original) {
+        [deepCopy2 addObject:[obj copy]];
+    }
+    
+    // 容器地址 — 不同
+    NSLog(@"容器地址: %p VS %p VS %p VS %p",
+          original, deepCopy, deepCopy1, deepCopy2);
+    
+    // 元素地址 — 现在不同了！
+    NSLog(@"元素地址: %p VS %p VS %p VS %p",
+          original[0], deepCopy[0], deepCopy1[0], deepCopy2[0]);
+    
+    // 验证：外部修改不影响副本
+    [a appendString:@"（被篡改）"];
+    NSLog(@"original[0] = %@", original[0]);     // "A（被篡改）"
+    NSLog(@"deepCopy[0] = %@", deepCopy[0]);     // "A"  ✅ 不受影响
+    NSLog(@"deepCopy1[0] = %@", deepCopy1[0]);   // "A"  ✅ 不受影响
+    NSLog(@"deepCopy2[0] = %@", deepCopy2[0]);   // "A"  ✅ 不受影响
+}
+
 
 #pragma mark - 8. 演示纯 KVC 字典转模型的缺陷
 - (void)demonstratePureKVCLimitations {
