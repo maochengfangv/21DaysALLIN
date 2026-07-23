@@ -15,6 +15,8 @@
 @property (nonatomic, strong) Person *person;
 @property (nonatomic, strong) Person *kvoPerson;
 
+@property (nonatomic, strong) NSThread *workThread;
+
 @end
 
 @implementation ViewController
@@ -45,17 +47,105 @@
     
     // 8. 演示纯 KVC 字典转模型的缺陷
     //    [self demonstratePureKVCLimitations];
-//        [self shallowCopy];
-//    [self shallowMutlCopy];
-//    [self realDeepCopy];
+    //        [self shallowCopy];
+    //    [self shallowMutlCopy];
+    //    [self realDeepCopy];
     
-//    [self  deepCopyWithMutableElements];
+    //    [self  deepCopyWithMutableElements];
     
-//    [self ress];
-//    [self subThreadDispatchAfter];
-//    [self subThreadTimer];
-    [self subThreadPerformSelector];
+    //    [self ress];
+    //    [self subThreadDispatchAfter];
+    //    [self subThreadTimer];
+    //    [self subThreadPerformSelector];
+    
+    /*
+     startWorkerThread
+         → NSThread 启动
+         → threadEntry: 添加 Port + run（RunLoop 死循环）
+         → 子线程常驻 ✅
+
+     scheduleDelayedTasks
+         → performSelector:onThread: → 注册到 workerThread 的 RunLoop 上
+         → 1秒后执行 task1 ✅
+         → 3秒后执行 task2 ✅
+
+     stopWorkerThread
+         → CFRunLoopStop → threadEntry 的 run 返回
+         → 线程退出 ✅
+     */
+    [self startWorkThread];
+    [self scheduleDelayedTasks];
 }
+
+#pragma mark - 1. 启动常驻子线程
+
+- (void)startWorkThread {
+    self.workThread = [[NSThread alloc] initWithTarget:self selector:@selector(threadEntry) object:nil];
+    self.workThread.name = @"Work";
+    [self.workThread start];
+}
+
+- (void)threadEntry {
+    
+    @autoreleasepool {
+        //关键 给runloop 添加一个source 防止它立刻提出
+        [[NSRunLoop currentRunLoop] addPort:[NSPort port] forMode:NSDefaultRunLoopMode];
+        [[NSRunLoop currentRunLoop] run]; //死循环，直到 CFRunLoopStop
+    }
+}
+
+
+
+#pragma mark - 2. 发送延迟任务（无 Timer 循环引用）
+
+- (void)scheduleDelayedTasks {
+    // 方案1：performSelector:withObject:afterDelay: 必须在本线程 RunLoop 上调用
+    // 所以先切到 workThread，在该线程上注册延迟任务
+    [self performSelector:@selector(_scheduleOnWorkThread)
+                 onThread:self.workThread
+               withObject:nil
+            waitUntilDone:NO];
+}
+
+- (void)_scheduleOnWorkThread {
+    // 此时已经在 workThread 的 RunLoop 上下文中
+    // 延迟 1 秒执行 task1
+    [self performSelector:@selector(task1) withObject:nil afterDelay:1.0];
+    // 延迟 3 秒执行 task2
+    [self performSelector:@selector(task2) withObject:nil afterDelay:3.0];
+    //延迟 5秒 退出子线程
+    [self performSelector:@selector(stopWorkerThread) withObject:nil afterDelay:5.0];
+}
+
+- (void)task1 {
+    NSLog(@"[线程:%@] 任务1执行", [NSThread currentThread]);
+}
+
+- (void)task2 {
+    NSLog(@"[线程:%@] 任务2执行", [NSThread currentThread]);
+}
+
+
+#pragma mark - 3. 退出子线程
+
+- (void)stopWorkerThread {
+    [self performSelector:@selector(_exitThread)
+                 onThread:self.workThread
+               withObject:nil
+            waitUntilDone:NO
+                    modes:@[NSDefaultRunLoopMode]];
+}
+
+- (void)_exitThread {
+    NSLog(@"[线程:%@]   RunLoop 即将停止", [NSThread currentThread]);
+    CFRunLoopStop(CFRunLoopGetCurrent());
+    NSLog(@"[线程:%@]   RunLoop 已停止, 线程即将退出", [NSThread currentThread]);
+    self.workThread = nil;
+}
+
+
+
+
 
 #pragma mark -  演示 容器类拷贝 浅拷贝
 
@@ -407,6 +497,8 @@
        } @catch (NSException *exception) {
            // 观察者可能已经移除
        }
+    
+    [self stopWorkerThread];
 }
 
 @end
