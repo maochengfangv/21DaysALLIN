@@ -167,8 +167,8 @@ class Teacher {
     @LogOnChange var name: String = "小王"
 }
 
-let t = Teacher()
-t.name = "老张" // 输出: 监听到宿主 [Teacher] 的属性被修改为: 老张
+//let t = Teacher()
+//t.name = "老张" // 输出: 监听到宿主 [Teacher] 的属性被修改为: 老张
 
 
 // 将使用 Property Wrapper 的代码封装在一个 struct 中
@@ -268,4 +268,52 @@ class MyContainer{
 // 因为 $name 只能在属性所属的类型内部访问
 // print("顶层访问 $name: \(container.$name)") // 这行会报错
 
+protocol Animal {
+    func speak()
+}
+
+
+struct Dog: Animal { func speak() {
+    print("🐶 汪！")
+} }
+
+struct Cat: Animal {
+    func speak() {
+        print("🐱 喵！")
+    }
+}
+
+// MARK: - 1. some (不透明类型)
+// 承诺返回“某种”确定的动物，一旦确定就不能更改
+
+func getOneAnimal() -> some Animal {
+    return Dog()
+}
+
+let animal1 = getOneAnimal()
+let animal2 = getOneAnimal()
+
+// MARK: - 2. any (类型擦除/存在类型)
+// 这是一个容器，可以装任何满足 Animal 协议的对象
+func getAnyAnimal(isDog: Bool) -> any Animal {
+    return isDog ? Dog(): Cat()
+}
+
+
+var anyAnimal: any Animal = Dog()
+
+anyAnimal = Cat()
+
+// MARK: - 3. 核心区别演示：异构数组
+
+let animals: [any Animal] = [Dog(),Cat(),Dog()]
+
+print("--- some test ---")
+animal1.speak()
+
+print("\n --- any test ---")
+
+for a in animals {
+    a.speak()
+}
 
