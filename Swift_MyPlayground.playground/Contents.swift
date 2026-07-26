@@ -127,6 +127,48 @@ final class MainThread<T: Sendable>: @unchecked Sendable {
        }
 }
 
+@propertyWrapper
+struct LogOnChange<Value> {
+    private var value: Value
+    
+    init(wrappedValue: Value) {
+        self.value = wrappedValue
+    }
+
+    // 这就是“黑魔法”：编译器会自动寻找这个签名的静态下标
+    static subscript<OuterSelf>(
+        _enclosingInstance instance: OuterSelf,
+        wrapped wrappedKeyPath: ReferenceWritableKeyPath<OuterSelf, Value>,
+        storage storageKeyPath: ReferenceWritableKeyPath<OuterSelf, LogOnChange<Value>>
+    ) -> Value {
+        get {
+            return instance[keyPath: storageKeyPath].value
+        }
+        set {
+            print("监听到宿主 [\(instance)] 的属性被修改为: \(newValue)")
+            instance[keyPath: storageKeyPath].value = newValue
+            
+            // 如果宿主是 ObservableObject，这里可以手动触发 objectWillChange.send()
+            if let observable = instance as? any ObservableObject {
+                // 模拟 @Published 的行为
+            }
+        }
+    }
+
+    // 注意：一旦实现了上面的 static subscript，这个 wrappedValue 就不会被调用了（但仍需声明）
+    var wrappedValue: Value {
+        get { fatalError("这个方法不会被调用") }
+        set { fatalError("这个方法不会被调用") }
+    }
+}
+
+// 演示宿主
+class Teacher {
+    @LogOnChange var name: String = "小王"
+}
+
+let t = Teacher()
+t.name = "老张" // 输出: 监听到宿主 [Teacher] 的属性被修改为: 老张
 
 
 // 将使用 Property Wrapper 的代码封装在一个 struct 中
@@ -213,8 +255,10 @@ class MyContainer{
 //    }
 }
 
-var container = MyContainer() // MyContainer 需要是 var，因为 demonstrate 是 mutating
-container.demodd()
+
+
+//var container = MyContainer() // MyContainer 需要是 var，因为 demonstrate 是 mutating
+//container.demodd()
 //container.demonstrate()
 
 // 顶层代码中直接访问 wrappedValue 是可以的
@@ -223,3 +267,5 @@ container.demodd()
 // 但在顶层代码中直接访问 $name 仍然会报错 "Cannot find '$name' in scope"
 // 因为 $name 只能在属性所属的类型内部访问
 // print("顶层访问 $name: \(container.$name)") // 这行会报错
+
+
