@@ -37,6 +37,24 @@ protocol Container<Item> {
 struct IntContainer: Container { var value: Int = 42 }
 struct StringContainer: Container { var value: String = "Hello" }
 
+// MARK: - Actor & MainActor 演示
+actor BankAount {
+    private var balance: Double = 0
+    func deposit(amount: Double) {
+        balance += amount
+        print("💰 Actor: 已存入 \(amount)，当前余额: \(balance)")
+    }
+    
+    func getBlance() -> Double { balance }
+}
+
+@MainActor
+class UIHanler {
+    func updateLabel(text: String) {
+        print("🖥️ MainActor: 正在更新 UI -> [\(text)]，当前线程: \(Thread.current)")
+    }
+}
+
 class ViewController: UIViewController {
 
     private var VM = UserProfileViewModel()
@@ -49,7 +67,32 @@ class ViewController: UIViewController {
 //        testObservedWrapper()
 //        testAnySomeFunc()
 //        testAsssociateType()
-        testAnyContainers()
+//        testAnyContainers()
+        // 测试并发特性
+        Task {
+            await testConcurrency()
+        }
+    }
+    
+    private func testConcurrency() async {
+        
+        print("\n--- 开始测试 Actor & MainActor ---")
+        
+        let account = BankAount()
+        let uiHandler = UIHanler()
+        
+        //模拟多个并发任务
+        await withTaskGroup(of: Void.self) { group in
+            for i in 1...5 {
+                group.addTask {
+                    await account.deposit(amount: Double(i * 10))
+                }
+            }
+        }
+        let finalBalance = await account.getBlance()
+        
+        // 跨 Actor 调用 MainActor
+        await uiHandler.updateLabel(text: "最终账户余额：\(finalBalance)")
     }
 
     private func testObservedWrapper() {
