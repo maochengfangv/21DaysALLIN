@@ -38,14 +38,50 @@ struct IntContainer: Container { var value: Int = 42 }
 struct StringContainer: Container { var value: String = "Hello" }
 
 // MARK: - Actor & MainActor 演示
-actor BankAount {
+actor BankAccount {
     private var balance: Double = 0
-    func deposit(amount: Double) {
-        balance += amount
-        print("💰 Actor: 已存入 \(amount)，当前余额: \(balance)")
+    
+    // 模拟一个耗时的异步汇率检查
+    func fetchExchangeRate() async -> Double {
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000) // 挂起 100ms
+        return 1.0
     }
     
-    func getBlance() -> Double { balance }
+    func deposit(amount: Double) async {
+        // 1. await 之前检查
+        guard balance < 100 else {
+            print("🚫 存款前检查：余额已达上限，拒绝操作")
+            return
+        }
+        
+        print("➡️ Actor: 开始存款 \(amount)，挂起前余额: \(balance)")
+        
+        // 🚨 风险点：此处 await 会释放 Actor 执行权
+        let rate = await fetchExchangeRate()
+        
+//        // 💡 2. await 回来后重新检查业务规则
+//        // Actor 保证了内存安全，但不保证逻辑原子性。
+//        guard balance < 100 else {
+//            print("🚨 重入检查：挂起期间余额已达上限 \(balance)，取消本次存款")
+//            return
+//        }
+//        
+//        let oldBalance = balance
+//        balance += amount * rate
+//        print("✅ Actor: 存款完成！挂起前是 \(oldBalance)，现在余额: \(balance)")
+        
+        // 💡 改进后的检查：不仅看当前，还要看加完之后超不超
+        let projectedBalance = balance + (amount * rate)
+        guard projectedBalance <= 100 else {
+            print("🚨 严格检查：加存后将达到 \(projectedBalance)，超过 100 限制，取消操作")
+            return
+        }
+                
+        balance = projectedBalance
+        print("✅ Actor: 存款成功，现在余额: \(balance)")
+    }
+    
+    func getBalance() -> Double { balance }
 }
 
 @MainActor
@@ -78,7 +114,7 @@ class ViewController: UIViewController {
         
         print("\n--- 开始测试 Actor & MainActor ---")
         
-        let account = BankAount()
+        let account = BankAccount()
         let uiHandler = UIHanler()
         
         //模拟多个并发任务
@@ -89,7 +125,7 @@ class ViewController: UIViewController {
                 }
             }
         }
-        let finalBalance = await account.getBlance()
+        let finalBalance = await account.getBalance()
         
         // 跨 Actor 调用 MainActor
         await uiHandler.updateLabel(text: "最终账户余额：\(finalBalance)")
