@@ -105,10 +105,54 @@ class ViewController: UIViewController {
 //        testAsssociateType()
 //        testAnyContainers()
         // 测试并发特性
+//        Task {
+//            await testConcurrency()
+//        }
+//        testAwait()
+        testTaskGroup()
+        
+    }
+    
+    private func testAwait() {
         Task {
-            await testConcurrency()
+            let name = await fetchName()
+            print("拿到结果：\(name)")
         }
     }
+    
+    private func fetchName() async -> String {
+        try? await Task.sleep(nanoseconds:  300_000_000)
+        return "Hello World"
+    }
+    
+    private func testTaskGroup() {
+        Task {
+            await withTaskGroup(of: Int.self) { group in
+                for i in 1...3 {
+                    group.addTask {
+                        await self.work(i)
+                    }
+                }
+                
+                var sum = 0
+                for await value in group {
+                    print("当前value：\(value)")
+                    sum += value
+                }
+                print("总和：\(sum)")
+            }
+            
+        }
+    }
+    
+    private  func work(_ id: Int) async -> Int {
+        
+        try? await Task.sleep(nanoseconds: UInt64() * 100_000_000)
+        print("任务\(id) 完成")
+        return id * 10
+    }
+    
+    
     
     private func testConcurrency() async {
         
