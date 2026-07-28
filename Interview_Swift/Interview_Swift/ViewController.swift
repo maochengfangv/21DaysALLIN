@@ -90,6 +90,80 @@ class UIHanler {
         print("🖥️ MainActor: 正在更新 UI -> [\(text)]，当前线程: \(Thread.current)")
     }
 }
+//管共享状态
+actor Counter {
+    private var value = 0
+    
+    func increment() {
+        value += 1
+    }
+    
+    func current() -> Int {
+       value
+    }
+}
+
+//管主线程UI
+@MainActor
+func updateUI(_ text: String) {
+    print("是否主线程：\(Thread.isMainThread)")
+    print("UI 更新：\(text)")
+}
+
+//sendable 约束跨并发域传递的数据是否安全
+// 真正决定因素是它包裹的东西是否能够安全跨并发域传递
+/*
+ 纯值类型大概率可以
+ 带class 大概率不行
+ 带泛型 看有没有sendable约束
+ 带闭包 看是不是@Sendable
+ */
+//struct User: Sendable {
+//    let id: Int
+//    let name: String
+//}
+
+//final class Profile: @unchecked Sendable {
+//    var nickName: String
+//    init(nickName: String) {
+//        self.nickName = nickName
+//    }
+//}
+
+actor Profile {
+    var nickName: String
+    init(nickName: String) {
+        self.nickName = nickName
+    }
+    func updateName(_ newName: String) async {
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        nickName = newName
+        print("后台写入：\(nickName)")
+    }
+       
+    func currentName() async -> String {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        return nickName
+    }
+}
+
+struct User: Sendable {
+    let id: Int
+    let name: String
+    let profile:Profile
+}
+
+struct Teacher:Sendable {
+    let id: Int
+    var name: String
+}
+
+final class TeacherRef {
+    var name: String
+    init(name: String) {
+        self.name = name
+    }
+}
 
 class ViewController: UIViewController {
 
@@ -109,8 +183,88 @@ class ViewController: UIViewController {
 //            await testConcurrency()
 //        }
 //        testAwait()
-        testTaskGroup()
+//        testTaskGroup()
+//        testCounter()
+//        testSendable()
+//        testSendableStruct()
+        testCOWAddress()
+    }
+    //底层证明先共享后拷贝
+    private func  testCOWAddress() {
         
+        let arr1 = [1,2,3]
+        var arr2 = arr1
+        
+        arr1.withUnsafeBufferPointer { p1 in
+            arr2.withUnsafeBufferPointer { p2 in
+                print("写入前是否共享存储：\(p1.baseAddress == p2.baseAddress)")
+            }
+        }
+        arr2.append(4)
+        arr1.withUnsafeBufferPointer { p1 in
+            arr2.withUnsafeBufferPointer { p2 in
+                print("写入后是否共享存储：\(p1.baseAddress == p2.baseAddress)")
+            }
+        }
+    }
+    
+    func testSendableStruct() {
+        var user = Teacher(id: 1, name: "Oliver")
+        
+//        //跨并发安全传值
+//        Task.detached { [user] in
+//            try? await Task.sleep(nanoseconds: 200_000_000)
+//            print("后台任务收到用户：\(user.name)")
+//        }
+//        //值快照 传递不可变快照
+//        let snapshot = user
+//           Task.detached {
+//               try? await Task.sleep(nanoseconds: 200_000_000)
+//               print("后台任务收到用户：\(snapshot.name)")
+//           }
+//        
+//        user.name = "Jack"
+//        print("主线程修改后的本地用户：\(user.name)")
+        
+        let tt = TeacherRef(name: "Zhang")
+        
+        Task.detached { [tt] in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            print("后台任务收到TeacherRef用户：\(tt.name)")
+        }
+        
+        tt.name = "Wang"
+        print("主线程修改后的本地TeacherRef用户：\(tt.name)")
+        
+    }
+    
+    private func testSendable () {
+        let user = User(id: 1, name: "王松", profile: Profile(nickName: ""))
+
+           Task.detached {
+               for i in 1...5 {
+                   await user.profile.updateName("后台改名\(i)")
+                   let name = await user.profile.currentName()
+                   print("后台读取：\(name)")
+               }
+           }
+
+//           Task.detached {
+//               for _ in 1...5 {
+//                   let name = await user.profile.currentName()
+//                   print("后台读取：\(name)")
+//               }
+//           }
+    }
+    
+    private func testCounter() {
+        let counter = Counter()
+        Task.detached {
+            await counter.increment()
+            await counter.increment()
+            let value = await counter.current()
+            await updateUI("当前计数：\(value)")
+        }
     }
     
     private func testAwait() {
@@ -152,8 +306,7 @@ class ViewController: UIViewController {
         return id * 10
     }
     
-    
-    
+
     private func testConcurrency() async {
         
         print("\n--- 开始测试 Actor & MainActor ---")
