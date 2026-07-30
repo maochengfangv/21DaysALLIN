@@ -165,6 +165,58 @@ final class TeacherRef {
     }
 }
 
+@propertyWrapper
+struct Clamper0To100 {
+    private var num: Int
+    var wrappedValue: Int {
+        get { num }
+        set {
+            num = min(max(newValue, 0), 100)
+        }
+    }
+    init(wrappedValue: Int) {
+        self.num = min(max(wrappedValue, 0), 100)
+    }
+}
+
+@MainActor
+struct DemoMainActorStruct  {
+    var count: Int = 0
+    mutating func inc(_ tag: String) {
+        count += 1
+        print("🧩 @MainActor struct inc[\(tag)] count=\(count) isMain=\(Thread.isMainThread)")
+    }
+}
+
+@MainActor
+enum DemoMainActorStructStore {
+    static var value = DemoMainActorStruct()
+    static  func inc(_ tag: String) {
+        value.inc(tag)
+    }
+}
+
+@MainActor
+final class DemoMainActorClass {
+    static let shared = DemoMainActorClass()
+    var count: Int = 0
+
+    func inc(_ tag: String) {
+        count += 1
+        print("🏷️ @MainActor class inc[\(tag)] count=\(count) isMain=\(Thread.isMainThread)")
+    }
+}
+
+actor DemoActor {
+    static let shared = DemoActor()
+    private var count: Int = 0
+
+    func inc(_ tag: String) {
+        count += 1
+        print("🎭 actor inc[\(tag)] count=\(count) isMain=\(Thread.isMainThread)")
+    }
+}
+
 class ViewController: UIViewController {
 
     private var VM = UserProfileViewModel()
@@ -174,6 +226,10 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
         print("\n--- 开始测试 ---")
+//        @Clamper0To100 var score = 120
+//        print(score)
+//        score = -10
+//        print(score)
 //        testObservedWrapper()
 //        testAnySomeFunc()
 //        testAsssociateType()
@@ -187,8 +243,40 @@ class ViewController: UIViewController {
 //        testCounter()
 //        testSendable()
 //        testSendableStruct()
-        testCOWAddress()
+//        testCOWAddress()
+        Task {
+            await demoWhyMainActorPlusClass()
+        }
     }
+    private func demoWhyMainActorPlusClass() async {
+         print("\n--- Demo: @MainActor 可修饰 struct/class，但不能修饰 actor ---")
+         print("入口线程 isMain=\(Thread.isMainThread)")
+
+         await MainActor.run {
+             var a = DemoMainActorStruct()
+             var b = a
+             a.inc("a1")
+             b.inc("b1")
+             a.inc("a2")
+             print("🧩 struct copy 独立状态 aCount=\(a.count) bCount=\(b.count) isMain=\(Thread.isMainThread)")
+
+             let c1 = DemoMainActorClass.shared
+             let c2 = DemoMainActorClass.shared
+             c1.inc("c1")
+             c2.inc("c2")
+             print("🏷️ class identity same=\(ObjectIdentifier(c1) == ObjectIdentifier(c2)) count=\(c1.count) isMain=\(Thread.isMainThread)")
+         }
+
+         print("\n--- Demo: 后台调用 @MainActor 会 hop 到主线程；actor 只是串行隔离，不等于主线程 ---")
+         let detached = Task.detached(priority: .background) {
+             print("Detached(before await) isMain=\(Thread.isMainThread)")
+             await DemoMainActorStructStore.inc("detached-struct")
+             await DemoMainActorClass.shared.inc("detached-class")
+             await DemoActor.shared.inc("detached-actor")
+             print("Detached(after await) isMain=\(Thread.isMainThread)")
+         }
+         _ = await detached.value
+     }
     //底层证明先共享后拷贝
     private func  testCOWAddress() {
         
