@@ -261,10 +261,40 @@ class ViewController: UIViewController {
 
     private var VM = UserProfileViewModel()
     private var cancellables = Set<AnyCancellable>()
+    private lazy var demoStackView: UIStackView = {
+        let stackView = UIStackView()
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.axis = .vertical
+        stackView.spacing = 16
+        stackView.alignment = .fill
+        return stackView
+    }()
+
+    private lazy var titleLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "WKWebView 面试 Demo"
+        label.font = .boldSystemFont(ofSize: 24)
+        label.textAlignment = .center
+        return label
+    }()
+
+    private lazy var subtitleLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "覆盖活动页、JSBridge、_blank 新开页、异常页演示"
+        label.font = .systemFont(ofSize: 14)
+        label.textColor = .secondaryLabel
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        return label
+    }()
     
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
+        view.backgroundColor = .systemBackground
+        setupDemoEntryView()
         print("\n--- 开始测试 ---")
 //        @Clamper0To100 var score = 120
 //        print(score)
@@ -287,10 +317,137 @@ class ViewController: UIViewController {
 //        Task {
 //            await demoWhyMainActorPlusClass()
 //        }
-        Task {
-            await testTaskCancellation()
+//        Task {
+//            await testTaskCancellation()
+//        }
+    }
+
+    private func setupDemoEntryView() {
+        view.addSubview(demoStackView)
+        demoStackView.addArrangedSubview(titleLabel)
+        demoStackView.addArrangedSubview(subtitleLabel)
+        demoStackView.addArrangedSubview(makeDemoButton(title: "打开活动页", action: #selector(didTapOpenCampaignButton)))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "测试 JSBridge", action: #selector(didTapOpenJSBridgeButton)))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "测试 _blank 新开页", action: #selector(didTapOpenBlankPageButton)))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "打开异常页", action: #selector(didTapOpenErrorPageButton)))
+
+        NSLayoutConstraint.activate([
+            demoStackView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            demoStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            demoStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24)
+        ])
+    }
+
+    @objc
+    private func didTapOpenCampaignButton() {
+        openTestWebView()
+    }
+
+    @objc
+    private func didTapOpenJSBridgeButton() {
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { font-family: -apple-system; padding: 24px; background: #f5f7fb; }
+                .card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); }
+                button { width: 100%; margin-top: 12px; padding: 14px; border: 0; border-radius: 12px; background: #007aff; color: white; font-size: 16px; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h2>JSBridge Demo</h2>
+                <p>点击下面按钮向 Native 发送消息。</p>
+                <button onclick="window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'reload', from: 'h5' })">通知 Native Reload</button>
+                <button onclick="window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'close', from: 'h5' })">通知 Native Close</button>
+            </div>
+        </body>
+        </html>
+        """
+
+        openWebView(
+            .init(
+                title: "JSBridge Demo",
+                source: .htmlString(html, baseURL: nil),
+                businessId: "js-bridge-demo"
+            )
+        )
+    }
+
+    @objc
+    private func didTapOpenBlankPageButton() {
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { font-family: -apple-system; padding: 24px; background: #fff; }
+                a { display: inline-block; margin-top: 16px; padding: 12px 16px; background: #34c759; color: white; border-radius: 12px; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <h2>target=_blank Demo</h2>
+            <p>点击下面链接，会命中 WebView 的 targetFrame == nil 分支。</p>
+            <a href="https://www.apple.com" target="_blank">新开页打开 Apple</a>
+        </body>
+        </html>
+        """
+
+        openWebView(
+            .init(
+                title: "_blank Demo",
+                source: .htmlString(html, baseURL: nil),
+                businessId: "blank-target-demo"
+            )
+        )
+    }
+
+    @objc
+    private func didTapOpenErrorPageButton() {
+        openWebView(
+            .init(
+                title: "异常页 Demo",
+                source: .remoteURL(URL(string: "ftp://invalid-webview-demo")!),
+                businessId: "error-page-demo"
+            )
+        )
+    }
+
+    private func makeDemoButton(title: String, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.configuration = .filled()
+        button.configuration?.title = title
+        button.configuration?.cornerStyle = .large
+        button.heightAnchor.constraint(equalToConstant: 52).isActive = true
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+
+    private func openTestWebView() {
+        openWebView(
+            .init(
+                title: "活动页",
+                source: .remoteURL(URL(string: "https://www.apple.com")!),
+                businessId: "campaign-detail"
+            )
+        )
+    }
+
+    private func openWebView(_ configuration: WebViewPageConfiguration) {
+        let controller = WKWebViewController(configuration: configuration)
+        if let navigationController {
+            navigationController.pushViewController(controller, animated: true)
+        } else {
+            let wrappedNavigationController = UINavigationController(rootViewController: controller)
+            wrappedNavigationController.modalPresentationStyle = .fullScreen
+            present(wrappedNavigationController, animated: true)
         }
     }
+    
     // 测试Task Cancellation
     private func testTaskCancellation() async {
         
@@ -602,4 +759,3 @@ class ViewController: UIViewController {
         }
     }
 }
-
