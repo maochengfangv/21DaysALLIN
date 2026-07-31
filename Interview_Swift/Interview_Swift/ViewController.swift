@@ -217,6 +217,46 @@ actor DemoActor {
     }
 }
 
+
+enum CancellationDemo {
+
+    static func cooperative(tag: String, steps: Int = 10, delayNanoseconds: UInt64 = 100_000_000) async {
+        
+        var index = 0
+        do {
+            for i in 1...steps {
+//                try Task.checkCancellation()
+                index = i
+                try await Task.sleep(nanoseconds: delayNanoseconds)
+                print("✅ coop[\(tag)] step=\(i) isCancelled=\(Task.isCancelled) isMain=\(Thread.isMainThread)")
+            }
+            print("✅ coop[\(tag)] finished")
+        } catch is CancellationError {
+            print("🛑 coop[\(tag)] step=\(index) cancelled isCancelled=\(Task.isCancelled) isMain=\(Thread.isMainThread)")
+        } catch {
+            print("❌ coop[\(tag)] error=\(error)")
+        }
+    }
+
+    private static func blockingSleep(seconds: TimeInterval) async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                Thread.sleep(forTimeInterval: seconds)
+                continuation.resume()
+            }
+        }
+    }
+
+    static func nonCooperativeBlocking(tag: String, steps: Int = 6, sleepSeconds: TimeInterval = 0.2) async {
+        print("🚧 nonCoop[\(tag)] begin isCancelled=\(Task.isCancelled) isMain=\(Thread.isMainThread)")
+        for i in 1...steps {
+            await blockingSleep(seconds: sleepSeconds)
+            print("🚧 nonCoop[\(tag)] step=\(i) isCancelled=\(Task.isCancelled) isMain=\(Thread.isMainThread)")
+        }
+        print("🚧 nonCoop[\(tag)] finished isCancelled=\(Task.isCancelled) isMain=\(Thread.isMainThread)")
+    }
+}
+
 class ViewController: UIViewController {
 
     private var VM = UserProfileViewModel()
@@ -244,14 +284,68 @@ class ViewController: UIViewController {
 //        testSendable()
 //        testSendableStruct()
 //        testCOWAddress()
+//        Task {
+//            await demoWhyMainActorPlusClass()
+//        }
         Task {
-            await demoWhyMainActorPlusClass()
+            await testTaskCancellation()
         }
+    }
+    // 测试Task Cancellation
+    private func testTaskCancellation() async {
+        
+        print("\n--- Demo: Task 取消是协作式（cooperative）---")
+        
+        let coop = Task.detached(priority: .background) {
+            await CancellationDemo.cooperative(tag: "detached-coop",steps: 500)
+        }
+        
+        let nonCoop = Task.detached(priority: .background) {
+            await CancellationDemo.nonCooperativeBlocking(tag: "detached-nonCoop")
+        }
+        
+        try? await Task.sleep(nanoseconds: 350_000_000)
+        
+        print(">>> cancel coop & nonCoop")
+        
+        coop.cancel()
+        nonCoop.cancel()
+        
+//        print("\n--- Demo: 结构化并发会随父任务取消；detached 不会 ---")
+//        
+//        let structered = Task.detached(priority: .background) {
+//            print("group parent begin isCancelled=\(Task.isCancelled) isMain=\(Thread.isMainThread)")
+//            
+//            await withTaskGroup(of: Void.self) { group in
+//                group.addTask { await CancellationDemo.cooperative(tag: "group-1") }
+//                group.addTask { await CancellationDemo.cooperative(tag: "group-2") }
+//                group.addTask { await CancellationDemo.cooperative(tag: "group-3") }
+//                await group.waitForAll()
+//            }
+//            print("group parent end isCancelled=\(Task.isCancelled) isMain=\(Thread.isMainThread)")
+//        }
+        
+//        let siblingDetached = Task.detached(priority: .background) {
+//            await CancellationDemo.cooperative(tag: "sibling-detached", steps: 12)
+////            await CancellationDemo.nonCooperativeBlocking(tag: "non-sibling-detached",steps: 12)
+//
+//        }
+//        
+//        try? await Task.sleep(nanoseconds: 350_000_000)
+////        print(">>> cancel group parent (should stop group tasks), sibling-detached keeps running")
+////        structered.cancel()
+//        
+//        siblingDetached.cancel()
+        
+//        _ = await structered.value
+//        _ = await siblingDetached.value
+        
+        print("--- Demo: Task cancellation done ---")
     }
     private func demoWhyMainActorPlusClass() async {
          print("\n--- Demo: @MainActor 可修饰 struct/class，但不能修饰 actor ---")
          print("入口线程 isMain=\(Thread.isMainThread)")
-
+        
          await MainActor.run {
              var a = DemoMainActorStruct()
              var b = a
