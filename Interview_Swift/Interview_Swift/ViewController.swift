@@ -358,10 +358,16 @@ class ViewController: UIViewController {
                 .tip { margin-top: 12px; color: #6b7280; font-size: 13px; }
             </style>
             <script>
+                // window 是当前网页 JS 运行时的全局对象。
+                // 在 WKWebView 里，WebKit 会把 Native 注册的桥接对象挂到 window.webkit.messageHandlers 上。
+                // 所以这句代码的含义是：H5 通过名为 nativeBridge 的消息通道，把 action 发给 iOS 端。
                 function requestNativeJSON() {
                     window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'getNativeJSON', from: 'h5' });
                 }
 
+                // 这个函数同样挂在 window 上。
+                // Native 会通过 evaluateJavaScript("window.renderNativeJSONFromNative(...)") 主动回调它。
+                // 这里把 Native 回传的对象格式化成 JSON 字符串，再展示到页面上。
                 function renderNativeJSONFromNative(payload) {
                     var resultNode = document.getElementById('nativeJSONResult');
                     resultNode.textContent = JSON.stringify(payload, null, 2);
@@ -371,11 +377,12 @@ class ViewController: UIViewController {
         <body>
             <div class="card">
                 <h2>JSBridge Demo</h2>
+                <p>扫盲版理解：window 是网页全局对象，window.webkit.messageHandlers.nativeBridge.postMessage(...) 是 H5 调 Native。</p>
                 <p>点击下面按钮，从 Native 获取 JSON 并展示到 H5 页面。</p>
                 <button onclick="requestNativeJSON()">获取 Native JSON</button>
                 <button onclick="window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'reload', from: 'h5' })">通知 Native Reload</button>
                 <button onclick="window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'close', from: 'h5' })">通知 Native Close</button>
-                <div class="tip">下面区域展示 Native 回传给 H5 的 JSON 字符串：</div>
+                <div class="tip">下面区域展示 Native 回传给 H5 的 JSON 字符串。这个回传动作来自 Native 执行 window.renderNativeJSONFromNative(...)</div>
                 <pre id="nativeJSONResult">等待 Native 回传 JSON...</pre>
             </div>
         </body>
