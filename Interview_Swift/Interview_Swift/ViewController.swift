@@ -354,14 +354,29 @@ class ViewController: UIViewController {
                 body { font-family: -apple-system; padding: 24px; background: #f5f7fb; }
                 .card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); }
                 button { width: 100%; margin-top: 12px; padding: 14px; border: 0; border-radius: 12px; background: #007aff; color: white; font-size: 16px; }
+                pre { margin-top: 16px; padding: 16px; border-radius: 12px; background: #111827; color: #e5e7eb; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
+                .tip { margin-top: 12px; color: #6b7280; font-size: 13px; }
             </style>
+            <script>
+                function requestNativeJSON() {
+                    window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'getNativeJSON', from: 'h5' });
+                }
+
+                function renderNativeJSONFromNative(payload) {
+                    var resultNode = document.getElementById('nativeJSONResult');
+                    resultNode.textContent = JSON.stringify(payload, null, 2);
+                }
+            </script>
         </head>
         <body>
             <div class="card">
                 <h2>JSBridge Demo</h2>
-                <p>点击下面按钮向 Native 发送消息。</p>
+                <p>点击下面按钮，从 Native 获取 JSON 并展示到 H5 页面。</p>
+                <button onclick="requestNativeJSON()">获取 Native JSON</button>
                 <button onclick="window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'reload', from: 'h5' })">通知 Native Reload</button>
                 <button onclick="window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'close', from: 'h5' })">通知 Native Close</button>
+                <div class="tip">下面区域展示 Native 回传给 H5 的 JSON 字符串：</div>
+                <pre id="nativeJSONResult">等待 Native 回传 JSON...</pre>
             </div>
         </body>
         </html>

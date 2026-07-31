@@ -271,6 +271,42 @@ final class WKWebViewController: UIViewController {
             dismiss(animated: true)
         }
     }
+
+    private func sendNativeJSONToH5() {
+        let payload: [String: Any] = [
+            "businessId": pageConfiguration.businessId,
+            "platform": "iOS",
+            "container": "WKWebView",
+            "user": [
+                "id": 10001,
+                "name": "maochengfang",
+                "role": "iOS Architect"
+            ],
+            "features": [
+                "jsBridge",
+                "target_blank",
+                "error_retry",
+                "process_recovery"
+            ],
+            "timestamp": Int(Date().timeIntervalSince1970)
+        ]
+
+        guard
+            JSONSerialization.isValidJSONObject(payload),
+            let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
+            let jsonObjectString = String(data: data, encoding: .utf8)
+        else {
+            print("Native JSON 序列化失败，businessId=\(pageConfiguration.businessId)")
+            return
+        }
+
+        let script = "window.renderNativeJSONFromNative(\(jsonObjectString));"
+        webView.evaluateJavaScript(script) { _, error in
+            if let error {
+                print("Native -> H5 传递 JSON 失败，error=\(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 extension WKWebViewController: WKNavigationDelegate {
@@ -428,13 +464,15 @@ extension WKWebViewController: WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == pageConfiguration.jsBridgeName else { return }
 
-        // Demo 里只保留最核心的两类命令，便于面试时说明 H5->Native 通信链路。
+        // Demo 里保留最核心的三类命令，演示 H5->Native 和 Native->H5 双向通信。
         if let body = message.body as? [String: Any], let action = body["action"] as? String {
             switch action {
             case "close":
                 closePage()
             case "reload":
                 reloadPage()
+            case "getNativeJSON":
+                sendNativeJSONToH5()
             default:
                 print("收到 H5 Bridge 消息，businessId=\(pageConfiguration.businessId)，action=\(action)，body=\(body)")
             }
