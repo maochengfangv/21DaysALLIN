@@ -74,3 +74,14 @@ yarn-error.log
 
 # === IDE ===
 .vscode/
+
+# === uni-app x demo: first_uni-app-x ===
+/first_uni-app-x/.hbuilderx/
+/first_uni-app-x/unpackage/
+/first_uni-app-x/dist/
+/first_uni-app-x/build/
+/first_uni-app-x/coverage/
+/first_uni-app-x/static/app-android/*.apk
+/first_uni-app-x/*.apk
+/first_uni-app-x/*.aab
+/first_uni-app-x/*.ipa
