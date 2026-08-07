@@ -1,286 +1,242 @@
-# IOSRNContainer — iOS 原生壳 + React Native 棕地集成
+# IOSRNContainer — iOS 原生壳 + RN 新架构棕地集成 · 控制台
 
-## 项目概述
+## 项目定位
 
-iOS 原生 App **棕地集成 React Native**（RN 0.76+ New Architecture），展示 **RCTReactNativeFactory 生命周期管理**、**TurboModule + Codegen 双端绑定**、**Fabric Native Component C++ 属性绑定**、**多开发者 Metro IP 协作配置** 的完整实践。RN 源码位于 `../MyRNModule`，通过 CocoaPods 以 Static Framework 方式引入。
+iOS 原生 App（棕地）侧集成 React Native 0.86.0 新架构的**宿主工程**。核心能力：
 
-## 项目结构
+- **RCTReactNativeFactory** 生命周期管理 + **RNBridgeManager** 桥预加载（启动性能优化）
+- **三态 Bundle 源切换**：`embedded（内置）` ↔ `hotUpdate（OTA）` ↔ `remoteDebug（Metro）`
+- **双模块独立加载**：`MyRNModule`（完整 Demo） / `BusinessCardList`（仅卡片列表）
+- **TurboModule + Fabric Codegen** 双端绑定：业务卡片回调走 JSI 零拷贝、C++ Props 同步
+- **控制台首页**：5 个入口 + 实时状态面板，可视化验证 OTA 链路、Fabric 渲染、原生↔JS 回调
+
+## 目录结构
 
 ```
 IOSRNContainer/
 ├── IOSRNContainer/
-│   ├── AppDelegate.swift                    # App 入口：bootstrap ReactNativeFactory
-│   ├── SceneDelegate.swift                  # Scene 生命周期
-│   ├── ViewController.swift                 # 原生首页（打开 RN 页面入口）
-│   ├── ReactNativeHost.swift                # RN 宿主：单例工厂 + Bundle URL 管理
-│   └── ReactNativeViewController.swift      # RN 页面容器 ViewController
-├── IOSRNModule/
+│   ├── AppDelegate.swift                    # bootstrap ReactNativeHost + RNBridgeManager
+│   ├── SceneDelegate.swift
+│   ├── ViewController.swift                 # 【重写】RN 控制台：5 入口 + 状态面板
+│   ├── ReactNativeHost.swift                # 【重写】Factory + RNBridgeManager 双适配
+│   ├── ReactNativeViewController.swift      # 【重写】支持 onCardPress/onActionPress/onExposure
+│   ├── RNBusinessEventEmitter.h/.m          # 原生 → JS 事件总线（固定 Event + callbackId 路由）
+│   ├── RNBusinessConstants.h/.m/.swift      # 业务常量：callbackId、模块名
+│   └── Info.plist
+├── IOSRNModule/                             # 【扩展】业务 Native Module 实现
 │   ├── CodegenHeaders/
-│   │   └── MyRNAppSpecs.h                  # Codegen 自动生成的 Umbrella Header
-│   ├── CounterTurboModule.h                 # TurboModule 头文件（实现 NativeCounterSpec 协议）
-│   ├── CounterTurboModule.mm                # TurboModule ObjC++ 实现
-│   ├── NativeColoredView.h                  # Fabric Native Component 头文件
-│   └── NativeColoredView.mm                 # Fabric Native Component ObjC++ 实现
-├── Podfile                                  # CocoaPods：引入 ../MyRNModule + New Architecture 开关
+│   │   └── MyRNAppSpecs.h                   # Codegen 产物（pod install 自动生成）
+│   ├── CounterTurboModule.h/.mm             # Demo TurboModule：NativeCounterSpec
+│   ├── NativeColoredView.h/.mm              # Demo Fabric：RCTViewComponentView
+│   ├── BusinessCardBridgeTurboModule.h/.mm  # 【新增】业务卡片 TurboModule + JSI 绑定
+│   └── BusinessCardFabricView.h/.mm         # 【新增】业务卡片 Fabric + C++ Props/EventEmitter
+├── Podfile                                  # 【改造】引入 pod 'RNBridgePodspec'
 └── Podfile.lock
 ```
 
-## 架构流程
-
-```
-AppDelegate
-  └── ReactNativeHost.shared.bootstrap(with: launchOptions)
-        ├── ContainerReactNativeDelegate
-        │     ├── dependencyProvider = RCTAppDependencyProvider
-        │     └── sourceURL → Debug: Metro IP (Info.plist) / RELEASE: main.jsbundle
-        └── RCTReactNativeFactory(delegate: delegate)
-
-ViewController (原生首页)
-  └── openRNPage() → ReactNativeViewController(moduleName:"MyRNModule", initialProperties:{...})
-        └── ReactNativeHost.shared.makeRootView(moduleName:..., properties:...)
-              ├── 懒初始化：首次调用时 bootstrap()
-              └── rootViewFactory.view(withModuleName:...)
-```
-
----
-
-## 技术要点
-
-### 一、RCTReactNativeFactory 生命周期（ReactNativeHost）
-
-```swift
-final class ReactNativeHost {
-    static let shared = ReactNativeHost()
-    private var reactNativeFactory: RCTReactNativeFactory?
-
-    func bootstrap(with launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) {
-        guard reactNativeFactory == nil else { return }  // 幂等
-
-        let delegate = ContainerReactNativeDelegate()
-        delegate.dependencyProvider = RCTAppDependencyProvider()
-        reactNativeDelegate = delegate
-        reactNativeFactory = RCTReactNativeFactory(delegate: delegate)
-    }
-
-    func makeRootView(moduleName: String, initialProperties: [String: Any]?) -> UIView {
-        bootstrap()  // 懒初始化
-        return reactNativeFactory?.rootViewFactory?.view(
-            withModuleName: moduleName,
-            initialProperties: initialProperties,
-            launchOptions: cachedLaunchOptions
-        )
-    }
-}
-```
-
-- **双入口启动**：`AppDelegate.didFinishLaunching` 传入 `launchOptions` + 首次 `makeRootView` 懒初始化
-- **幂等保护**：`guard reactNativeFactory == nil` 防止重复创建
-- **RCTReactNativeFactory** 是 RN 0.76+ New Architecture 的工厂类，替代旧的 `RCTBridge`
-
-### 二、多开发者 Metro Bundle URL 策略
-
-```swift
-final class ContainerReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
-    override func bundleURL() -> URL? {
-#if DEBUG
-        // 从 Info.plist 读取自定义 Metro IP（如 "192.168.1.100:8081"）
-        if let customIP = Bundle.main.object(forInfoDictionaryKey: "RNMetroServerIP") as? String,
-           !customIP.isEmpty {
-            return URL(string: "http://\(customIP)/index.bundle?platform=ios&dev=true&minify=false")
-        }
-        // 未配置 IP 时自动检测 localhost:8081
-        return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
-#else
-        return Bundle.main.url(forResource: "main", withExtension: "jsbundle")  // Release: 本地打包
-#endif
-    }
-}
-```
-
-| 场景 | Bundle 来源 | 说明 |
-|------|------------|------|
-| Debug + `Info.plist` 配置 `RNMetroServerIP` | `http://{自定义IP}:8081/index.bundle?...` | 团队成员各自配置本机 IP |
-| Debug + 未配置 IP | `RCTBundleURLProvider` 自动检测 localhost | 本地开发默认 |
-| Release | `main.jsbundle`（App Bundle 内嵌） | 生产发布 |
-
-### 三、CounterTurboModule — Codegen + JSI 绑定
-
-```objc
-// 头文件：遵循 Codegen 生成的协议
-#import <MyRNAppSpecs/MyRNAppSpecs.h>
-@interface CounterTurboModule : NSObject <NativeCounterSpec>
-@end
-
-// 实现文件
-@implementation CounterTurboModule {
-    double _count;
-}
-
-RCT_EXPORT_MODULE(NativeCounter)          // 注册模块名与 TS Spec 一致
-
-- (void)getValue:(RCTPromiseResolveBlock)resolve
-          reject:(RCTPromiseRejectBlock)reject {
-    resolve(@(_count));
-}
-
-- (void)increment:(double)step resolve:...reject:... {
-    _count += step;
-    resolve(@(_count));
-}
-
-- (void)decrement:(double)step resolve:...reject:... {
-    _count -= step;
-    resolve(@(_count));
-}
-
-- (void)reset:(RCTPromiseResolveBlock)resolve reject:... {
-    _count = 0;
-    resolve(nil);
-}
-
-// JSI 绑定：返回 Codegen 生成的 ObjCTurboModule 子类
-- (std::shared_ptr<TurboModule>)getTurboModule:(const ObjCTurboModule::InitParams &)params {
-    return std::make_shared<NativeCounterSpecJSI>(params);
-}
-```
-
-**关键链路：**
-```
-TS Spec (NativeCounter TurboModule)
-  → react-native-codegen
-    → MyRNAppSpecs.h (NativeCounterSpec 协议 + NativeCounterSpecJSI C++ 类)
-      → CounterTurboModule.mm 实现协议 + 返回 JSI 绑定
-        → RCT_EXPORT_MODULE(NativeCounter) 注册
-```
-
-- `NativeCounterSpec` 协议由 Codegen 从 TS Spec 自动生成，方法签名与 TS 端类型完全对应
-- `getTurboModule:` 是 TurboModule 的核心方法，返回 JSI 对象，JS 层通过 JSI 直接调用，**绕过 Bridge 序列化**
-- `RCTPromiseResolveBlock` / `RCTPromiseRejectBlock` 是 JS Promise 对应的 Native 回调
-
-### 四、NativeColoredView — Fabric Native Component
-
-```objc
-// 头文件
-@interface NativeColoredView : RCTViewComponentView  // Fabric 基类
-@end
-
-// 实现文件
-@implementation NativeColoredView
-
-// 注册组件的 ComponentDescriptor（Fabric 渲染器需要）
-+ (ComponentDescriptorProvider)componentDescriptorProvider {
-    return concreteComponentDescriptorProvider<NativeColoredViewComponentDescriptor>();
-}
-
-- (instancetype)initWithFrame:(CGRect)frame {
-    if (self = [super initWithFrame:frame]) {
-        static const auto defaultProps = std::make_shared<const NativeColoredViewProps>();
-        _props = defaultProps;  // 设置 C++ 默认 Props
-    }
-    return self;
-}
-
-- (void)updateProps:(const Props::Shared &)props
-           oldProps:(const Props::Shared &)oldProps {
-    const auto &newViewProps = *std::static_pointer_cast<const NativeColoredViewProps>(props);
-    [super updateProps:props oldProps:oldProps];
-
-    // 从 C++ Props 读取 color 字符串 → UIColor
-    if (!newViewProps.color.empty()) {
-        self.backgroundColor = [self rgbaFromHexString:
-            [NSString stringWithUTF8String:newViewProps.color.c_str()]];
-    }
-
-    // 从 C++ Props 读取 cornerRadius
-    self.layer.cornerRadius = newViewProps.cornerRadius;
-}
-```
-
-**Fabric Component 关键要素：**
-
-| 要素 | 代码 | 说明 |
-|------|------|------|
-| 基类 | `RCTViewComponentView` | Fabric 要求所有 Native View 继承此类 |
-| 协议 | `RCTNativeColoredViewViewProtocol` | Codegen 生成，声明 updateProps 等 |
-| ComponentDescriptor | `concreteComponentDescriptorProvider<NativeColoredViewComponentDescriptor>()` | 注册到 Fabric 渲染器 |
-| Props 读取 | `std::static_pointer_cast<const NativeColoredViewProps>(props)` | 从 C++ 共享指针读取 Codegen 生成的 Props 结构体 |
-| HEX 解析 | `rgbaFromHexString:` | 手动实现 `#RRGGBB` / `#AARRGGBB` → `UIColor` |
-
-### 五、Codegen 集成配置
-
-#### Podfile 关键配置
+## Podfile 关键配置
 
 ```ruby
-# 1. 解析 MyRNModule 的 react_native_pods.rb
+# 1. 从 MyRNModule 解析 react_native_pods.rb
 require Pod::Executable.execute_command('node', ['-p',
-  'require.resolve("react-native/scripts/react_native_pods.rb",
-   {paths: [process.argv[1]]},)',
-  File.expand_path('../MyRNModule', __dir__)]).strip
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', File.expand_path('../MyRNModule', __dir__)]).strip
 
-# 2. New Architecture 显式开关
+# 2. 新架构显式开关
 ENV['RCT_NEW_ARCH_ENABLED'] = '1'
 ENV['USE_FRAMEWORKS'] = 'static'
 
-# 3. 使用 react_native_pods 引入 RN
-use_react_native!(
-  :path => rn_react_native_path,
-  :app_path => rn_app_path      # 指向 MyRNModule，Codegen 从此查找 TS Spec
-)
+target 'IOSRNContainer' do
+  rn_app_path = File.expand_path('../MyRNModule', __dir__)
+  rn_node_modules_path = File.join(rn_app_path, 'node_modules')
+  rn_react_native_path = File.join(rn_node_modules_path, 'react-native')
 
-# 4. Post-install: 自动注入 ReactCodegen Header 搜索路径
-# 让 IOSRNContainer target 可以 #import <MyRNAppSpecs/MyRNAppSpecs.h>
-installer.aggregate_targets.each do |aggregate_target|
-  aggregate_target.user_project.targets.each do |target|
-    next unless target.name == 'IOSRNContainer'
-    target.build_configurations.each do |config|
-      paths = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
-      codegen_path = '${PODS_ROOT}/Headers/Public/ReactCodegen'
-      paths << codegen_path unless paths.include?(codegen_path)
-      config.build_settings['HEADER_SEARCH_PATHS'] = paths
-    end
-  end
+  use_react_native!(
+    :path => rn_react_native_path,
+    :app_path => rn_app_path            # Codegen 从该路径读取 specs/*.ts
+  )
+  pod 'react-native-safe-area-context', :path => File.join(rn_node_modules_path, 'react-native-safe-area-context')
+
+  # 3. 引入 RN 桥接 Pod
+  pod 'RNBridgePodspec', :path => File.join(rn_app_path, 'ios/BridgePodspec')
 end
 ```
 
-#### Codegen 生成物
+## 首页控制台 5 入口说明
+
+| 按钮 | 功能 | 核心技术点 |
+|------|------|-----------|
+| 📱 打开 RN 主页面 | 加载 `moduleName: "MyRNModule"`，完整 Demo（热更新面板/TurboModule/Fabric） | `RCTReactNativeFactory.rootViewFactory.view()` |
+| 🎴 打开 RN 卡片列表 | 加载 `moduleName: "BusinessCardList"`，原生注入 mock 卡片数据并绑定回调 | `BusinessCardBridgeTurboModule.setInitialCardsPayload()` + JS 侧 `getInitialCards()` |
+| 📦 切换内置 Bundle | 调用 `RNBridgeManager.switchBundle(to: .embedded)` | `RCTReloadCommandSetBundleURL()` + `RCTTriggerReloadCommandListeners()` |
+| 🔥 切换热更 Bundle | 调用 `RNBridgeManager.switchBundle(to: .hotUpdate)`，无 OTA 包时自动 fallback | `HotUpdateBundleStore.currentBundlePath()` 校验文件存在 |
+| 🔄 重新加载 Bundle | 触发运行时重载，下一次打开 RN 页面用最新源 | `NotificationCenter` + Bridge 重建流程 |
+
+### 状态面板
+
+控制台底部实时展示：
+- 内置 `main.jsbundle` 是否存在（Debug 模式通常从 Metro 拉取，显示 `⚠️ 不存在` 属正常）
+- 当前 Bundle 源：`embedded` / `hotUpdate` / `remoteDebug`
+- Bundle 路径 + Bridge Ready / Valid 状态
+
+## 原生 ↔ JS 回调链路（业务卡片场景）
+
+### 数据流方向一：原生 → JS（初始卡片）
 
 ```
-MyRNModule (TS 源码)
-  └── src/native/specs/
-        ├── NativeCounter.ts          → Codegen → MyRNAppSpecs.h (NativeCounterSpec + NativeCounterSpecJSI)
-        └── NativeColoredView.ts       → Codegen → ComponentDescriptors.h + Props.h + RCTComponentViewHelpers.h
+ViewController.openCardListPage()
+  └── BusinessCardBridgeTurboModule.setInitialCardsPayload(jsonString)
+        └── JS CardListScreen.componentDidMount
+              └── BusinessCardBridge.getInitialCards()  // Promise<String>
+                    └── TurboModule → JSI → 原生 → JSON.parse → 渲染
 ```
 
-- `MyRNAppSpecs.h` 是 Codegen 自动生成的 **Umbrella Header**（`ios/CodegenHeaders/` 目录下的只读文件）
-- 包含 `NativeCounterSpec` 协议（声明方法签名）和 `NativeCounterSpecJSI` C++ 类（JSI 绑定定义）
-- 包含 `#error This file must be compiled as Obj-C++` 编译期检查，确保 .mm 扩展名
+### 数据流方向二：JS → 原生（用户操作）
 
-### 六、运行方式
+```
+JS BusinessCard.onPress(cardId)
+  └── BusinessCardBridge.onCardPress(cardId)
+        └── JSI → ObjCTurboModule → BusinessCardBridgeTurboModule.onCardPress
+              └── 静态 block 回调
+                    └── ReactNativeViewController.bindBusinessCardCallbacks
+                          └── ViewController { showAlert / 路由跳转 / 埋点 }
+```
 
+### 三种回调协议
+
+```swift
+ReactNativeViewController.cardVC.onCardPress = { cardId in
+    // 整张卡片点击：路由跳转
+}
+cardVC.onActionPress = { cardId, actionId, actionType in
+    // 按钮操作：actionType 0=跳转 1=收藏 2=分享 3=点赞
+}
+cardVC.onExposure = { cardId, timestamp in
+    // 曝光埋点：0.3s 延迟去抖，防止快速滑过误报
+}
+```
+
+## Bundle 决策链 & 热更新生效条件
+
+`ReactNativeHost.ContainerReactNativeDelegate.bundleURL()` 的决策优先级：
+
+```
+┌─ DEBUG 模式 ──────────────────────────────────────┐
+│ 1. Info.plist["RNMetroServerIP"] → 自定义 Metro IP │
+│ 2. RCTBundleURLProvider → localhost:8081 兜底       │
+└────────────────────────────────────────────────────┘
+┌─ RELEASE 模式 ─────────────────────────────────────────────┐
+│ 1. RNBridgeManager.hotUpdateBundleURL()  // OTA 已下载优先   │
+│ 2. Bundle.main.url("main.jsbundle")     // 内置兜底        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**热更新生效完整时序：**
+
+```
+JS HotUpdateService.downloadAndInstall(manifest)
+  ├── ZIP → unzip → SHA256(package) + SHA256(bundle) + 可选 RSA 签名校验
+  ├── 写入热更新目录：Documents/hot-updates/packages/{id}/main.jsbundle
+  └── activatePackage → HotUpdateBundleStore.setCurrentBundlePath(热更路径)
+        └── (immediate 模式) HotUpdateBridge.reloadBundle()
+              └── RCTReloadCommandSetBundleURL(热更URL) + RCTTriggerReloadCommandListeners
+                    └── 下次 makeRootView 时 ContainerReactNativeDelegate.bundleURL 返回热更路径
+```
+
+## 使用 BusinessCardFabricView（新架构原生渲染）
+
+当 JS 层渲染 `BusinessCard` 时：
+- **平台 = iOS** 且 **`cardType = 0`** → 渲染 `<BusinessCardFabricView />`（C++ Props 同步绑定，无异步 Bridge 开销）
+- **其他情况** → 走 JS 视图实现（保证 Android / 旧卡片 / 未 Codegen 场景可用）
+
+**Props & Events（Codegen 生成）：**
+
+| 属性 | C++ 类型 | ObjC 读取 |
+|------|----------|-----------|
+| cardData | `std::string` | JSON: {cardId, title, coverUrl...} |
+| actions | `std::string` | JSON: [{id, title, actionType}...] |
+| cardType | `int` | 渲染样式编号 |
+| cornerRadius | `double` | layer.cornerRadius |
+| enableShadow | `bool` | layer.shadowOpacity |
+
+| 事件 | 载荷 |
+|------|------|
+| onCardPress | {cardId} |
+| onActionPress | {cardId, actionId, actionType} |
+| onExposure | {cardId, timestamp ms} |
+
+## 集成新的业务模块（标准流程）
+
+### Step 1：RN 侧新增 TS Spec
+`MyRNModule/specs/NativeFooModule.ts`（TurboModule）/ `NativeFooView.ts`（Fabric）
+
+### Step 2：更新 codegenConfig
+`package.json → codegenConfig.ios.modulesProvider / componentProvider` 登记
+
+### Step 3：IOSRNContainer 侧新增 ObjC++ 实现
+```objc
+// FooTurboModule.h
+#import <MyRNAppSpecs/MyRNAppSpecs.h>
+@interface FooTurboModule : NSObject <NativeFooModuleSpec>
+@end
+// FooTurboModule.mm
+@implementation FooTurboModule
+RCT_EXPORT_MODULE(NativeFooModule)
+- (std::shared_ptr<TurboModule>)getTurboModule:(const ObjCTurboModule::InitParams &)params {
+  return std::make_shared<NativeFooModuleSpecJSI>(params);
+}
+@end
+```
+Fabric 组件同理：`RCTViewComponentView` + `concreteComponentDescriptorProvider<...>()`
+
+### Step 4：pod install 触发 Codegen
 ```bash
 cd IOSRNContainer
-pod install
-open IOSRNContainer.xcworkspace
+pod install --repo-update
+```
+生成物：`Pods/Headers/Public/ReactCodegen/MyRNAppSpecs/MyRNAppSpecs.h`
 
-# 多开发者场景：在 Info.plist 中配置 RNMetroServerIP
-# <key>RNMetroServerIP</key>
-# <string>192.168.1.100:8081</string>
+## 运行指南
 
-# 启动 Metro（在 MyRNModule 目录）
+```bash
+# 0. 安装 JS 依赖（首次）
+cd ../MyRNModule && npm install
+
+# 1. 安装 CocoaPods 依赖（含 Codegen）
+cd IOSRNContainer
+pod install --repo-update
+
+# 2. 启动 Metro（另一终端窗口）
 cd ../MyRNModule
-npx react-native start
+npx react-native start            # 保持运行
+
+# 3. 编译运行 App
+xed -b .                          # 打开 IOSRNContainer.xcworkspace
+# Xcode → Cmd+R 运行到 Simulator / Device
+
+# 4. （可选）多开发者配置自定义 Metro IP
+# IOSRNContainer/Info.plist 新增 Key: RNMetroServerIP, Value: "192.168.1.100:8081"
 ```
 
-## 与 MyRNModule 的对端关系
+## 常见问题
 
-| IOSRNContainer (Native) | MyRNModule (RN) |
-|------------------------|-----------------|
-| `ReactNativeHost.bootstrap()` → `RCTReactNativeFactory` | RN 0.76+ New Architecture bridge startup |
-| `CounterTurboModule.mm` → `NativeCounterSpec` 协议 | `src/native/specs/NativeCounter.ts` TS Spec |
-| `NativeColoredView.mm` → Fabric Component | `src/native/specs/NativeColoredView.ts` TS Spec |
-| `ContainerReactNativeDelegate.bundleURL()` → Metro IP | Metro Bundler (8081) |
-| `makeRootView(moduleName:"MyRNModule")` | `index.js` → `AppRegistry.registerComponent('MyRNModule')` |
+| 现象 | 根因 | 处理 |
+|------|------|------|
+| `command not found: node`（pod install 时） | `/usr/local/bin/node` 未符号化 | `sudo ln -s $(which node) /usr/local/bin/node` |
+| BusinessCardFabricView 始终走 JS 兜底 | Codegen 未生成 ComponentDescriptor | `cd IOSRNContainer && pod install` 触发 Codegen |
+| `bridgeReady: false` | Bridge 首次加载耗时（~1-3s） | 控制台"重新加载 Bundle"或等待 `RNBridgeManager.preloadIfNeeded` 完成 |
+| 热更切换后新页面还是旧内容 | `RCTReloadCommandSetBundleURL` 只对新 Bridge 生效 | 切换后关闭已打开的 RN 页面，重新打开即可 |
+| OTA 未更新 | `manifestURL`/`publicKey` 未配置或 SHA256 不匹配 | 检查 `src/config/hotUpdate.ts` + `HotUpdateService.checkForUpdate` 返回值 |
 
-## 技术标签
+## 关键文件索引
 
-`iOS` `React Native` `New Architecture` `TurboModule` `Fabric` `JSI` `Codegen` `CocoaPods` `RCTReactNativeFactory` `RCTViewComponentView` `ComponentDescriptor` `ObjC++` `棕地集成` `Brownfield`
+| 职责 | 文件 |
+|------|------|
+| RN 控制台 5 入口 + 状态面板 | [ViewController.swift](file:///Users/maochengfang/Documents/LLMProject/21DaysALLIN/IOSRNContainer/IOSRNContainer/ViewController.swift) |
+| Factory + RNBridgeManager 双适配 Host | [ReactNativeHost.swift](file:///Users/maochengfang/Documents/LLMProject/21DaysALLIN/IOSRNContainer/IOSRNContainer/ReactNativeHost.swift) |
+| 通用 RN VC（含卡片回调绑定） | [ReactNativeViewController.swift](file:///Users/maochengfang/Documents/LLMProject/21DaysALLIN/IOSRNContainer/IOSRNContainer/ReactNativeViewController.swift) |
+| 业务卡片 TurboModule（含 JSI） | [BusinessCardBridgeTurboModule.mm](file:///Users/maochengfang/Documents/LLMProject/21DaysALLIN/IOSRNContainer/IOSRNModule/BusinessCardBridgeTurboModule.mm) |
+| 业务卡片 Fabric（C++ Props/Events） | [BusinessCardFabricView.mm](file:///Users/maochengfang/Documents/LLMProject/21DaysALLIN/IOSRNContainer/IOSRNModule/BusinessCardFabricView.mm) |
+| CocoaPods 依赖声明 | [Podfile](file:///Users/maochengfang/Documents/LLMProject/21DaysALLIN/IOSRNContainer/Podfile) |

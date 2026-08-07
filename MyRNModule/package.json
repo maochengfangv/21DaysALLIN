@@ -20,10 +20,12 @@
     },
     "ios": {
       "componentProvider": {
-        "NativeColoredView": "NativeColoredView"
+        "NativeColoredView": "NativeColoredView",
+        "BusinessCardFabricView": "BusinessCardFabricView"
       },
       "modulesProvider": {
-        "NativeCounter": "CounterTurboModule"
+        "NativeCounter": "CounterTurboModule",
+        "BusinessCardBridge": "BusinessCardBridgeTurboModule"
       }
     }
   },

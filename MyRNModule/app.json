@@ -1,4 +1,10 @@
 {
   "name": "MyRNModule",
-  "displayName": "MyRNModule"
+  "displayName": "MyRNModule",
+  "modules": [
+    {
+      "name": "BusinessCardList",
+      "displayName": "Business Card List"
+    }
+  ]
 }

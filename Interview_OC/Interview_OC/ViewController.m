@@ -8,14 +8,31 @@
 #import "ViewController.h"
 #import "Person.h"
 #import "LogHelper.h"
-#import "Article.h" // 导入 Article 模型
+#import "Article.h"
+#import <os/lock.h>
+#import <pthread.h>
+#import <QuartzCore/QuartzCore.h>
+
+static const NSInteger kLockBenchmarkCount = 1000000;
 
 @interface ViewController ()
 
 @property (nonatomic, strong) Person *person;
 @property (nonatomic, strong) Person *kvoPerson;
-
 @property (nonatomic, strong) NSThread *workThread;
+
+@property (nonatomic, assign) os_unfair_lock unfairLock;
+@property (nonatomic, assign) pthread_mutex_t mutexLock;
+@property (nonatomic, assign) pthread_mutex_t recursiveMutex;
+@property (nonatomic, strong) NSLock *nsLock;
+@property (nonatomic, strong) NSRecursiveLock *nsRecursiveLock;
+@property (nonatomic, strong) NSConditionLock *conditionLock;
+@property (nonatomic, strong) dispatch_semaphore_t semLock;
+@property (nonatomic, strong) dispatch_semaphore_t semLimit;
+@property (nonatomic, strong) dispatch_semaphore_t semSync;
+
+@property (nonatomic, assign) NSInteger unsafeCounter;
+@property (nonatomic, assign) NSInteger safeCounter;
 
 @end
 
@@ -23,6 +40,44 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    
+    [self setupLocks];
+    
+    // ====== 面试 Demo 演示入口（按需解除注释执行） ======
+    
+    // 1. 各类锁基本用法演示（推荐）
+//    [self demonstrateLockBasicUsage];
+    
+    // 2. 多线程数据安全验证 (无锁 vs 有锁)
+//    [self demonstrateThreadSafety];
+    
+    // 3. 性能对比测试 (百万级加解锁耗时)
+//    [self demonstrateLockBenchmark];
+    
+    // 4. 可重入锁验证 (递归安全)
+//    [self demonstrateRecursiveLock];
+    
+    // 5. Semaphore 限流 (并发数=3)
+//    [self demonstrateSemaphoreLimit];
+    
+    // 6. Semaphore 线程同步栅栏 (async → sync)
+//    [self demonstrateSemaphoreSync];
+    
+    // ====== ⚠️ 死锁演示：解除注释会阻塞线程，请单个调试 ======
+    // 7. NSLock 重入死锁 (普通锁非可重入)
+//    [self demonstrateNSLockDeadlock];
+    // 8. Semaphore 重入死锁 (无所有权，重复wait死锁)
+//    [self demonstrateSemaphoreDeadlock];
+    // 9.经典 AB 锁交叉死锁
+//    [self demonstrateCrossLockDeadlock];
+    
+    // ====== ✅ AB 死锁三大解决方案（推荐）：解除对应注释逐个验证） ======
+    // 10. 方案1：加锁顺序全局一致（都先 A 后 B）
+//    [self demonstrateFix1_LockOrder];
+    // 11. 方案2：tryLock 超时回滚 + 随机退避重试
+//    [self demonstrateFix2_TryLockTimeout];
+    // 12. 方案3：一次性申请所有资源（银行家算法雏形）
+    [self demonstrateFix3_BankerAlgorithm];
     
     //    // 1. 创建 Person 实例
     //    self.person = [[Person alloc] initWithName:@"张三" age:25];
@@ -491,14 +546,690 @@
 }
 
 - (void)dealloc {
-    // 安全移除观察者
-       @try {
-           [self.kvoPerson removeObserver:self forKeyPath:@"score"];
-       } @catch (NSException *exception) {
-           // 观察者可能已经移除
-       }
+    @try {
+        [self.kvoPerson removeObserver:self forKeyPath:@"score"];
+    } @catch (NSException *exception) {
+    }
     
     [self stopWorkerThread];
+    
+    pthread_mutex_destroy(&_mutexLock);
+    pthread_mutex_destroy(&_recursiveMutex);
+}
+
+#pragma mark - ========== 锁与信号量面试 Demo ==========
+
+#pragma mark 0. 锁初始化
+- (void)setupLocks {
+    _unfairLock = OS_UNFAIR_LOCK_INIT;
+    
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_NORMAL);
+    pthread_mutex_init(&_mutexLock, &attr);
+    pthread_mutexattr_destroy(&attr);
+    
+    pthread_mutexattr_t recAttr;
+    pthread_mutexattr_init(&recAttr);
+    pthread_mutexattr_settype(&recAttr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&_recursiveMutex, &recAttr);
+    pthread_mutexattr_destroy(&recAttr);
+    
+    self.nsLock = [[NSLock alloc] init];
+    self.nsRecursiveLock = [[NSRecursiveLock alloc] init];
+    self.conditionLock = [[NSConditionLock alloc] initWithCondition:0];
+    self.semLock = dispatch_semaphore_create(1);
+    self.semLimit = dispatch_semaphore_create(3);
+    self.semSync = dispatch_semaphore_create(0);
+}
+
+#pragma mark 1. 各类锁基本用法演示
+- (void)demonstrateLockBasicUsage {
+    NSLog(@"\n\n======= 【1】各类锁基本用法演示 =======\n");
+    
+    // 1.1 os_unfair_lock (iOS10+，性能最优)
+    NSLog(@"--- 1.1 os_unfair_lock ---");
+    os_unfair_lock_lock(&_unfairLock);
+    NSLog(@"os_unfair_lock: 已进入临界区");
+    os_unfair_lock_unlock(&_unfairLock);
+    NSLog(@"os_unfair_lock: 已退出临界区");
+    
+    // 1.2 pthread_mutex (POSIX 标准)
+    NSLog(@"\n--- 1.2 pthread_mutex (NORMAL) ---");
+    pthread_mutex_lock(&_mutexLock);
+    NSLog(@"pthread_mutex: 已进入临界区");
+    pthread_mutex_unlock(&_mutexLock);
+    NSLog(@"pthread_mutex: 已退出临界区");
+    
+    // 1.3 NSLock (Foundation 封装)
+    NSLog(@"\n--- 1.3 NSLock ---");
+    [self.nsLock lock];
+    NSLog(@"NSLock: 已进入临界区");
+    [self.nsLock unlock];
+    NSLog(@"NSLock: 已退出临界区");
+    BOOL locked = [self.nsLock lockBeforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+    NSLog(@"NSLock tryLock 结果: %@ (此时未持有锁应=YES)", locked ? @"成功" : @"失败");
+    if (locked) [self.nsLock unlock];
+    
+    // 1.4 @synchronized (语法糖，递归锁)
+    NSLog(@"\n--- 1.4 @synchronized ---");
+    @synchronized(self) {
+        NSLog(@"@synchronized(self): 已进入临界区");
+        @synchronized(self) {
+            NSLog(@"@synchronized(self): 嵌套进入，天然可重入 ✅");
+        }
+    }
+    
+    // 1.5 dispatch_semaphore(1) 模拟互斥锁
+    NSLog(@"\n--- 1.5 dispatch_semaphore(1) 模拟互斥锁 ---");
+    dispatch_semaphore_wait(self.semLock, DISPATCH_TIME_FOREVER);
+    NSLog(@"dispatch_semaphore(1): P操作成功，进入临界区");
+    dispatch_semaphore_signal(self.semLock);
+    NSLog(@"dispatch_semaphore(1): V操作成功，退出临界区");
+    
+    NSLog(@"\n======= 【1】基本用法演示完毕 ✅ =======\n");
+}
+
+#pragma mark 2. 多线程数据安全验证 (无锁 vs 有锁)
+- (void)demonstrateThreadSafety {
+    NSLog(@"\n\n======= 【2】多线程数据安全验证：无锁 vs 有锁 =======\n");
+    
+    NSUInteger threadCount = 10;
+    NSUInteger addPerThread = 1000;
+    
+    // --- 2.1 无锁版本：数据竞争，结果大概率错误 ---
+    NSLog(@"--- 2.1 无锁版本（会出现数据竞争） ---");
+    self.unsafeCounter = 0;
+    CFTimeInterval unsafeStart = CACurrentMediaTime();
+    dispatch_group_t group = dispatch_group_create();
+    for (NSUInteger i = 0; i < threadCount; i++) {
+        dispatch_group_async(group, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            for (NSUInteger j = 0; j < addPerThread; j++) {
+                self.unsafeCounter++;  // read-modify-write 非原子
+            }
+        });
+    }
+    dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+    CFTimeInterval unsafeCost = CACurrentMediaTime() - unsafeStart;
+    NSLog(@"无锁结果: unsafeCounter = %ld （期望值=%ld）✅:%@",
+          (long)self.unsafeCounter,
+          (long)(threadCount * addPerThread),
+          self.unsafeCounter == (threadCount * addPerThread) ? @"恰好正确(概率极低)" : @"❌ 出现数据丢失");
+    NSLog(@"无锁耗时: %.3f ms", unsafeCost * 1000);
+    
+    // --- 2.2 加锁版本：os_unfair_lock 保护 ---
+    NSLog(@"\n--- 2.2 加锁版本 (os_unfair_lock) ---");
+    self.safeCounter = 0;
+    CFTimeInterval safeStart = CACurrentMediaTime();
+    dispatch_group_t group2 = dispatch_group_create();
+    for (NSUInteger i = 0; i < threadCount; i++) {
+        dispatch_group_async(group2, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            for (NSUInteger j = 0; j < addPerThread; j++) {
+                os_unfair_lock_lock(&self->_unfairLock);
+                self.safeCounter++;
+                os_unfair_lock_unlock(&self->_unfairLock);
+            }
+        });
+    }
+    dispatch_group_wait(group2, DISPATCH_TIME_FOREVER);
+    CFTimeInterval safeCost = CACurrentMediaTime() - safeStart;
+    NSLog(@"有锁结果: safeCounter = %ld （期望值=%ld）✅:%@",
+          (long)self.safeCounter,
+          (long)(threadCount * addPerThread),
+          self.safeCounter == (threadCount * addPerThread) ? @"完全正确" : @"❌ 加锁也错了！");
+    NSLog(@"有锁耗时: %.3f ms（加锁带来的开销）", safeCost * 1000);
+    
+    NSLog(@"\n======= 【2】线程安全验证完毕 ✅ =======\n");
+}
+
+#pragma mark 3. 性能对比测试 (百万次加解锁)
+- (void)demonstrateLockBenchmark {
+    NSLog(@"\n\n======= 【3】锁性能基准测试 (加解锁 %ld 次) =======\n", (long)kLockBenchmarkCount);
+    
+    NSMutableArray<NSDictionary *> *results = [NSMutableArray array];
+    
+    // 3.1 os_unfair_lock
+    {
+        CFTimeInterval start = CACurrentMediaTime();
+        for (NSInteger i = 0; i < kLockBenchmarkCount; i++) {
+            os_unfair_lock_lock(&_unfairLock);
+            os_unfair_lock_unlock(&_unfairLock);
+        }
+        CFTimeInterval cost = CACurrentMediaTime() - start;
+        [results addObject:@{@"name": @"os_unfair_lock", @"cost": @(cost)}];
+        NSLog(@"os_unfair_lock    : 总耗时 %.3f ms | 单次 %.1f ns",
+              cost * 1000, cost / kLockBenchmarkCount * 1e9);
+    }
+    
+    // 3.2 pthread_mutex(NORMAL)
+    {
+        CFTimeInterval start = CACurrentMediaTime();
+        for (NSInteger i = 0; i < kLockBenchmarkCount; i++) {
+            pthread_mutex_lock(&_mutexLock);
+            pthread_mutex_unlock(&_mutexLock);
+        }
+        CFTimeInterval cost = CACurrentMediaTime() - start;
+        [results addObject:@{@"name": @"pthread_mutex", @"cost": @(cost)}];
+        NSLog(@"pthread_mutex    : 总耗时 %.3f ms | 单次 %.1f ns",
+              cost * 1000, cost / kLockBenchmarkCount * 1e9);
+    }
+    
+    // 3.3 NSLock
+    {
+        CFTimeInterval start = CACurrentMediaTime();
+        for (NSInteger i = 0; i < kLockBenchmarkCount; i++) {
+            [self.nsLock lock];
+            [self.nsLock unlock];
+        }
+        CFTimeInterval cost = CACurrentMediaTime() - start;
+        [results addObject:@{@"name": @"NSLock", @"cost": @(cost)}];
+        NSLog(@"NSLock           : 总耗时 %.3f ms | 单次 %.1f ns",
+              cost * 1000, cost / kLockBenchmarkCount * 1e9);
+    }
+    
+    // 3.4 NSRecursiveLock
+    {
+        CFTimeInterval start = CACurrentMediaTime();
+        for (NSInteger i = 0; i < kLockBenchmarkCount; i++) {
+            [self.nsRecursiveLock lock];
+            [self.nsRecursiveLock unlock];
+        }
+        CFTimeInterval cost = CACurrentMediaTime() - start;
+        [results addObject:@{@"name": @"NSRecursiveLock", @"cost": @(cost)}];
+        NSLog(@"NSRecursiveLock  : 总耗时 %.3f ms | 单次 %.1f ns",
+              cost * 1000, cost / kLockBenchmarkCount * 1e9);
+    }
+    
+    // 3.5 @synchronized
+    {
+        CFTimeInterval start = CACurrentMediaTime();
+        for (NSInteger i = 0; i < kLockBenchmarkCount; i++) {
+            @synchronized(self) {}
+        }
+        CFTimeInterval cost = CACurrentMediaTime() - start;
+        [results addObject:@{@"name": @"@synchronized", @"cost": @(cost)}];
+        NSLog(@"@synchronized    : 总耗时 %.3f ms | 单次 %.1f ns",
+              cost * 1000, cost / kLockBenchmarkCount * 1e9);
+    }
+    
+    // 3.6 dispatch_semaphore(1)
+    {
+        CFTimeInterval start = CACurrentMediaTime();
+        dispatch_semaphore_t sem = dispatch_semaphore_create(1);
+        for (NSInteger i = 0; i < kLockBenchmarkCount; i++) {
+            dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+            dispatch_semaphore_signal(sem);
+        }
+        CFTimeInterval cost = CACurrentMediaTime() - start;
+        [results addObject:@{@"name": @"dispatch_semaphore(1)", @"cost": @(cost)}];
+        NSLog(@"dispatch_sema(1) : 总耗时 %.3f ms | 单次 %.1f ns",
+              cost * 1000, cost / kLockBenchmarkCount * 1e9);
+    }
+    
+    // 排序输出性能排名
+    [results sortUsingDescriptors:@[[NSSortDescriptor sortDescriptorWithKey:@"cost" ascending:YES]]];
+    NSLog(@"\n--- 🏆 性能排名（快 → 慢） ---");
+    [results enumerateObjectsUsingBlock:^(NSDictionary *obj, NSUInteger idx, BOOL *stop) {
+        NSLog(@"  %lu. %@  (%.1f ns/op)", (unsigned long)idx + 1, obj[@"name"],
+              [obj[@"cost"] doubleValue] / kLockBenchmarkCount * 1e9);
+    }];
+    
+    NSLog(@"\n======= 【3】性能基准测试完毕 ✅ =======\n");
+}
+
+#pragma mark 4. 可重入锁验证 (递归场景)
+- (void)demonstrateRecursiveLock {
+    NSLog(@"\n\n======= 【4】可重入锁验证：递归调用安全 =======\n");
+    
+    NSInteger depth = 5;
+    
+    // 4.1 NSRecursiveLock 可重入 ✅
+    NSLog(@"--- 4.1 NSRecursiveLock 递归调用 (depth=%ld) ---", (long)depth);
+    [self _recursiveMethodWithNSRecursiveLock:depth];
+    NSLog(@"✅ NSRecursiveLock 递归成功，无死锁\n");
+    
+    // 4.2 @synchronized 可重入 ✅
+    NSLog(@"--- 4.2 @synchronized 递归调用 (depth=%ld) ---", (long)depth);
+    [self _recursiveMethodWithSynchronized:depth];
+    NSLog(@"✅ @synchronized 递归成功，无死锁\n");
+    
+    // 4.3 pthread_mutex(RECURSIVE) 可重入 ✅
+    NSLog(@"--- 4.3 pthread_mutex(RECURSIVE) 递归调用 (depth=%ld) ---", (long)depth);
+    [self _recursiveMethodWithPthreadRecursive:depth];
+    NSLog(@"✅ pthread_mutex(RECURSIVE) 递归成功，无死锁");
+    
+    NSLog(@"\n💡 对比：第 7 节演示了 NSLock 在同样递归下会死锁 ❌");
+    NSLog(@"\n======= 【4】可重入锁验证完毕 ✅ =======\n");
+}
+
+- (void)_recursiveMethodWithNSRecursiveLock:(NSInteger)level {
+    [self.nsRecursiveLock lock];
+    if (level > 0) {
+        NSLog(@"  NSRecursiveLock 进入第 %ld 层", (long)level);
+        [self _recursiveMethodWithNSRecursiveLock:level - 1];
+        NSLog(@"  NSRecursiveLock 返回第 %ld 层", (long)level);
+    } else {
+        NSLog(@"  🎯 NSRecursiveLock 抵达递归基 (level=0)");
+    }
+    [self.nsRecursiveLock unlock];
+}
+
+- (void)_recursiveMethodWithSynchronized:(NSInteger)level {
+    @synchronized(self) {
+        if (level > 0) {
+            NSLog(@"  @synchronized 进入第 %ld 层", (long)level);
+            [self _recursiveMethodWithSynchronized:level - 1];
+            NSLog(@"  @synchronized 返回第 %ld 层", (long)level);
+        } else {
+            NSLog(@"  🎯 @synchronized 抵达递归基 (level=0)");
+        }
+    }
+}
+
+- (void)_recursiveMethodWithPthreadRecursive:(NSInteger)level {
+    pthread_mutex_lock(&_recursiveMutex);
+    if (level > 0) {
+        NSLog(@"  pthread_mutex(R) 进入第 %ld 层", (long)level);
+        [self _recursiveMethodWithPthreadRecursive:level - 1];
+        NSLog(@"  pthread_mutex(R) 返回第 %ld 层", (long)level);
+    } else {
+        NSLog(@"  🎯 pthread_mutex(R) 抵达递归基 (level=0)");
+    }
+    pthread_mutex_unlock(&_recursiveMutex);
+}
+
+#pragma mark 5. Semaphore 限流 (并发数 = 3)
+- (void)demonstrateSemaphoreLimit {
+    NSLog(@"\n\n======= 【5】dispatch_semaphore 限流演示：最大并发=3 =======\n");
+    NSLog(@"💡 场景：10 个任务，但最多同时只能有 3 个在执行（类似 NSOperationQueue maxConcurrentCount）");
+    NSLog(@"🧠 面试考点：统一显式 QoS，避免 Thread Performance Checker 报优先级反转警告");
+    NSLog(@"     ❌ 旧写法 dispatch_get_global_queue(0, 0) → QoS 不确定，sem wait 跨 QoS 等锁会触发警告");
+    NSLog(@"     ✅ 修复：指定统一 QOS_CLASS_UTILITY 队列，所有 worker 同一优先级，彻底消除反转风险");
+    NSLog(@"观察：每批只有 3 个『开始』，间隔 1 秒后一批『完成』+ 下一批『开始』\n");
+    
+    // 🧠 面试点：不要用 global_queue(0, 0)，0=QOS_CLASS_DEFAULT 会随调用方继承导致 QoS 不一致
+    // semaphore 本身不支持『优先级继承协议』(不像 pthread_mutex 有 PTHREAD_PRIO_INHERIT)，
+    // 一旦高 QoS 线程 wait 低 QoS 线程持有的 sem，就会产生优先级反转，TP C 必报
+    dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_UTILITY, 0);
+    dispatch_semaphore_t limitSem = dispatch_semaphore_create(3);
+    
+    for (NSInteger i = 0; i < 10; i++) {
+        dispatch_async(queue, ^{
+            // QoS = UTILITY 工作线程内部 sem_wait，不会跨 QoS，无优先级反转 ✅
+            dispatch_semaphore_wait(limitSem, DISPATCH_TIME_FOREVER);
+            
+            NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+            [fmt setDateFormat:@"HH:mm:ss.SSS"];
+            NSString *ts = [fmt stringFromDate:[NSDate date]];
+            NSLog(@"[%@] 🚀 任务 %02ld 开始执行", ts, (long)i);
+            
+            sleep(1);
+            
+            ts = [fmt stringFromDate:[NSDate date]];
+            NSLog(@"[%@] ✅ 任务 %02ld 执行完成", ts, (long)i);
+            
+            dispatch_semaphore_signal(limitSem);
+        });
+    }
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        NSLog(@"\n======= 【5】Semaphore 限流演示完毕 ✅ =======\n");
+    });
+}
+
+#pragma mark 6. Semaphore 线程同步栅栏 (async → sync)
+- (void)demonstrateSemaphoreSync {
+    NSLog(@"\n\n======= 【6】dispatch_semaphore 线程同步栅栏 =======\n");
+    NSLog(@"💡 场景：将异步回调『转』同步等待，常用在网络请求单元测试 / 启动任务串联\n");
+    
+    // 模拟：子线程发起"异步请求"，主线程阻塞等待回调
+    dispatch_semaphore_t syncSem = dispatch_semaphore_create(0);
+    __block NSString *resultData = nil;
+    
+    NSLog(@"[主线程] 发起异步请求，等待返回...");
+    CFTimeInterval start = CACurrentMediaTime();
+    
+    // 🧠 面试点：同步栅栏场景下，主线程 (QoS=UserInitiated/Main) wait，
+    // 子线程 signal。semaphore 无所有权 + 无优先级继承，严格说仍有反转风险。
+    // 但这是『刻意的同步等待』语义，等同于 dispatch_sync，一般可接受。
+    // 若要极致严谨，子线程至少提升至同等 QoS 或更高一档：
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSLog(@"[子线程(QoS=UserInitiated)] 模拟网络请求 (2秒耗时)...");
+        sleep(2);
+        resultData = @"{\"code\": 0, \"msg\": \"请求成功\"}";
+        NSLog(@"[子线程] 请求完成，signal 唤醒主线程");
+        dispatch_semaphore_signal(syncSem);
+    });
+    
+    dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC));
+    long waitResult = dispatch_semaphore_wait(syncSem, timeout);
+    CFTimeInterval cost = CACurrentMediaTime() - start;
+    
+    if (waitResult == 0) {
+        NSLog(@"[主线程] ✅ 等到结果 (耗时 %.1fs)：%@", cost, resultData);
+    } else {
+        NSLog(@"[主线程] ❌ 等待超时 (耗时 %.1fs)", cost);
+    }
+    
+    // 演示 signal 与 wait 线程不同（semaphore 无所有权）
+    NSLog(@"\n💡 额外验证：semaphore 没有『所有权』概念");
+    NSLog(@"   NSLock 要求谁 lock 谁 unlock，semaphore 不需要：");
+    NSLog(@"   上面的例子：子线程 signal，主线程 wait，完全合法 ✅");
+    
+    NSLog(@"\n======= 【6】Semaphore 同步演示完毕 ✅ =======\n");
+}
+
+#pragma mark ⚠️ 7. 死锁案例 - NSLock 重入死锁
+- (void)demonstrateNSLockDeadlock {
+    NSLog(@"\n\n======= 【⚠️7】死锁案例：NSLock 递归重入死锁 =======\n");
+    NSLog(@"💡 原理：NSLock 是普通互斥锁，不支持可重入。同一线程连续 lock 两次，第二次永远等不到 unlock\n");
+    NSLog(@"🔥 即将触发死锁... 执行后 Xcode 会卡住，可点击『暂停程序』查看调用栈\n");
+    
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        [self _deadlockRecursiveWithNSLock:3];
+    });
+}
+
+- (void)_deadlockRecursiveWithNSLock:(NSInteger)level {
+    NSLog(@"  尝试 lock 进入 level=%ld", (long)level);
+    [self.nsLock lock];
+    NSLog(@"  ✅ lock 成功 level=%ld", (long)level);
+    
+    if (level > 0) {
+        NSLog(@"  递归进入 level=%ld → 同线程再次 lock，死锁 💀", (long)(level - 1));
+        [self _deadlockRecursiveWithNSLock:level - 1]; // 死锁点
+    }
+    
+    [self.nsLock unlock];
+    NSLog(@"  unlock 成功 level=%ld (不会到达这里)", (long)level);
+}
+
+#pragma mark ⚠️ 8. 死锁案例 - Semaphore 重入死锁
+- (void)demonstrateSemaphoreDeadlock {
+    NSLog(@"\n\n======= 【⚠️8】死锁案例：dispatch_semaphore 重入死锁 =======\n");
+    NSLog(@"💡 原理：semaphore 天然不支持可重入，同线程连续 wait 两次（value=1 时），第二次 value=0 直接休眠\n");
+    NSLog(@"🔥 即将触发死锁...\n");
+    
+    dispatch_semaphore_t deadSem = dispatch_semaphore_create(1);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSLog(@"  [线程A] 第1次 wait，value=1→0，进入临界区");
+        dispatch_semaphore_wait(deadSem, DISPATCH_TIME_FOREVER);
+        
+        NSLog(@"  [线程A] 做一些事情...");
+        
+        NSLog(@"  [线程A] 第2次 wait，value=0→休眠，死锁 💀 (没有任何人能 signal)");
+        dispatch_semaphore_wait(deadSem, DISPATCH_TIME_FOREVER);
+        
+        dispatch_semaphore_signal(deadSem);
+        dispatch_semaphore_signal(deadSem);
+        NSLog(@"  ✅ 不会走到这里");
+    });
+}
+
+#pragma mark ⚠️ 9. 死锁案例 - 经典 AB 锁交叉死锁
+- (void)demonstrateCrossLockDeadlock {
+    NSLog(@"\n\n======= 【⚠️9】死锁案例：经典 AB 锁交叉死锁 =======\n");
+    NSLog(@"💡 原理：线程1 锁 A→等 B；线程2 锁 B→等 A。循环等待，谁都不释放。\n");
+    NSLog(@"🔥 即将触发死锁...\n");
+    
+    NSLock *lockA = [[NSLock alloc] init];
+    NSLock *lockB = [[NSLock alloc] init];
+    
+    dispatch_queue_t q1 = dispatch_queue_create("com.demo.thread1", DISPATCH_QUEUE_SERIAL);
+    dispatch_queue_t q2 = dispatch_queue_create("com.demo.thread2", DISPATCH_QUEUE_SERIAL);
+    
+    dispatch_async(q1, ^{
+        NSLog(@"[线程1] 🔒 加锁 A (成功)");
+        [lockA lock];
+        NSLog(@"[线程1] 执行 A 区域逻辑...(睡 0.5 秒确保对方也锁上 B)");
+        usleep(500000);
+        NSLog(@"[线程1] 🔒 尝试加锁 B → 等待 lockB 释放 (被线程2持有) 💀");
+        [lockB lock];      // 死锁点：等待线程2释放B
+        NSLog(@"[线程1] ✅ 锁 B 成功 (不会到达)");
+        [lockB unlock];
+        [lockA unlock];
+    });
+    
+    dispatch_async(q2, ^{
+        NSLog(@"[线程2] 🔒 加锁 B (成功)");
+        [lockB lock];
+        NSLog(@"[线程2] 执行 B 区域逻辑...(睡 0.5 秒确保对方也锁上 A)");
+        usleep(500000);
+        NSLog(@"[线程2] 🔒 尝试加锁 A → 等待 lockA 释放 (被线程1持有) 💀");
+        [lockA lock];      // 死锁点：等待线程1释放A
+        NSLog(@"[线程2] ✅ 锁 A 成功 (不会到达)");
+        [lockA unlock];
+        [lockB unlock];
+    });
+    
+    NSLog(@"💡 请看 Demo 10/11/12 对应三大解决方案 → 到 viewDidLoad 解除注释运行 ✅");
+}
+
+#pragma mark ✅ 10. AB死锁 方案1：加锁顺序全局一致（都先 A 后 B）
+- (void)demonstrateFix1_LockOrder {
+    NSLog(@"\n\n======= 【✅10】方案1：加锁顺序全局一致（都先 A 后 B） =======\n");
+    NSLog(@"💡 原理：破坏『循环等待』四个必要条件之一。所有线程统一 先锁A再锁B，环路被切断，永远不会死锁\n");
+    NSLog(@"🧠 面试考点：死锁四必要条件 = 互斥 / 持有并等待 / 不可抢占 / 循环等待 → 本方案破坏『循环等待』\n");
+    
+    NSLock *lockA = [[NSLock alloc] init];
+    NSLock *lockB = [[NSLock alloc] init];
+    lockA.name = @"LockA";
+    lockB.name = @"LockB";
+    
+    dispatch_queue_t q1 = dispatch_queue_create("com.demo.thread1", DISPATCH_QUEUE_SERIAL);
+    dispatch_queue_t q2 = dispatch_queue_create("com.demo.thread2", DISPATCH_QUEUE_SERIAL);
+    dispatch_group_t group = dispatch_group_create();
+    
+    // 线程1：严格 A → B
+    dispatch_group_async(group, q1, ^{
+        NSLog(@"[线程1] 🔒 按协议：先锁 A");
+        [lockA lock];
+        NSLog(@"[线程1] ✅ 锁 A 成功，执行 A 逻辑 (0.3s)");
+        usleep(300000);
+        
+        NSLog(@"[线程1] 🔒 按协议：再锁 B");
+        [lockB lock];
+        NSLog(@"[线程1] ✅ 锁 B 成功，同时持有 A+B 临界区 (0.2s)");
+        usleep(200000);
+        
+        NSLog(@"[线程1] 🔓 解锁 B → A");
+        [lockB unlock];
+        [lockA unlock];
+        NSLog(@"[线程1] 🎉 完整执行完毕，无死锁 ✅\n");
+    });
+    
+    // 线程2：也严格 A → B（与 Demo 9 的致命区别！不再先 B 后 A）
+    dispatch_group_async(group, q2, ^{
+        NSLog(@"[线程2] 🔒 按协议：先锁 A");
+        [lockA lock];
+        NSLog(@"[线程2] ✅ 锁 A 成功，执行 A 逻辑 (0.3s)");
+        usleep(300000);
+        
+        NSLog(@"[线程2] 🔒 按协议：再锁 B");
+        [lockB lock];
+        NSLog(@"[线程2] ✅ 锁 B 成功，同时持有 A+B 临界区 (0.2s)");
+        usleep(200000);
+        
+        NSLog(@"[线程2] 🔓 解锁 B → A");
+        [lockB unlock];
+        [lockA unlock];
+        NSLog(@"[线程2] 🎉 完整执行完毕，无死锁 ✅\n");
+    });
+    
+    // 主线程等两个线程跑完，打印总结
+    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+        NSLog(@"🏆 方案1总结：加锁顺序全局一致（全链路强制 LockA → LockB）");
+        NSLog(@"   ✅ 优点：零额外开销、性能无损、语义最清晰");
+        NSLog(@"   ❌ 缺点：架构约束强，跨团队/跨模块难统一；锁多了排序维护成本陡升");
+        NSLog(@"   🎯 适用：锁数量 < 5、团队小、全链路可控（如组件内私有锁）");
+    });
+}
+
+#pragma mark ✅ 11. AB死锁 方案2：tryLock 超时回滚 + 随机退避重试
+- (void)demonstrateFix2_TryLockTimeout {
+    NSLog(@"\n\n======= 【✅11】方案2：tryLock 超时回滚 + 随机退避重试 =======\n");
+    NSLog(@"💡 原理：破坏『不可抢占』条件。拿不到下一把锁就全部释放、等一会儿重试，不会一直『持有并等待』卡死\n");
+    NSLog(@"🧠 面试考点：与方案1互补。lockBeforeDate: 返回 NO 说明获取失败；必须按『倒序释放已持有的锁』，避免部分持有\n");
+    
+    NSLock *lockA = [[NSLock alloc] init];
+    NSLock *lockB = [[NSLock alloc] init];
+    
+    const NSInteger kMaxRetry = 5;
+    const NSTimeInterval kLockTimeout = 0.2; // 单锁超时时间
+    
+    // 封装：原子执行「事务逻辑」— 返回 YES=完成，NO=需要重试
+    BOOL (^transferWorker)(NSString *, NSLock *, NSLock *) = ^BOOL(NSString *threadName, NSLock *firstLock, NSLock *secondLock) {
+        // Step 1：锁第一把
+        if (![firstLock lockBeforeDate:[NSDate dateWithTimeIntervalSinceNow:kLockTimeout]]) {
+            NSLog(@"[%@] ⚠️ 锁 %@ 超时，本次放弃 (无持有 → 直接重试)", threadName, firstLock.name ?: @"firstLock");
+            return NO;
+        }
+        NSLog(@"[%@] ✅ 锁 第一把 成功", threadName);
+        usleep(100000); // 模拟临界区耗时，放大冲突
+        
+        // Step 2：锁第二把 → 失败要回滚第一把！
+        if (![secondLock lockBeforeDate:[NSDate dateWithTimeIntervalSinceNow:kLockTimeout]]) {
+            NSLog(@"[%@] ⚠️ 锁 第二把 超时 → 🔙 回滚释放第一把（关键！不能持锁退出)", threadName);
+            [firstLock unlock];  // 🧠 不可遗漏：倒序释放，否则下次才能继续前进
+            return NO;
+        }
+        NSLog(@"[%@] ✅ 锁 第二把 成功 → 进入双锁完整临界区", threadName);
+        usleep(200000);
+        
+        // Step 3：业务完成，倒序解锁（与加锁相反）
+        [secondLock unlock];
+        [firstLock unlock];
+        NSLog(@"[%@] 🎉 业务完成，双锁已释放 ✅\n", threadName);
+        return YES;
+    };
+    
+    dispatch_queue_t q1 = dispatch_queue_create("com.demo.thread1", DISPATCH_QUEUE_SERIAL);
+    dispatch_queue_t q2 = dispatch_queue_create("com.demo.thread2", DISPATCH_QUEUE_SERIAL);
+    dispatch_group_t group = dispatch_group_create();
+    
+    // 线程1：顺序 A→B（故意 A→B
+    dispatch_group_async(group, q1, ^{
+        lockA.name = @"A"; lockB.name = @"B";
+        for (NSInteger attempt = 1; attempt <= kMaxRetry; attempt++) {
+            NSLog(@"[线程1] 🔁 第 %ld/%ld 次尝试 (A→B)", (long)attempt, (long)kMaxRetry);
+            BOOL done = transferWorker(@"线程1", lockA, lockB);
+            if (done) return;
+            // 随机退避：1~5 ms（面试点：避免『活锁』—— 两个线程同节奏互相让导致都跑不完）
+            useconds_t sleepUs = (arc4random() % 5 + 1) * 1000;
+            NSLog(@"[线程1] 💤 退避 %lu μs 后重试 (防活锁)", (unsigned long)sleepUs);
+            usleep(sleepUs);
+        }
+        NSLog(@"[线程1] ❌ 超过最大重试次数，上报业务失败");
+    });
+    
+    // 线程2：顺序 B→A（故意与线程1相反，最容易触发死锁 → 验证方案2兜底能力
+    dispatch_group_async(group, q2, ^{
+        for (NSInteger attempt = 1; attempt <= kMaxRetry; attempt++) {
+            NSLog(@"[线程2] 🔁 第 %ld/%ld 次尝试 (B→A)", (long)attempt, (long)kMaxRetry);
+            BOOL done = transferWorker(@"线程2", lockB, lockA);
+            if (done) return;
+            useconds_t sleepUs = (arc4random() % 5 + 1) * 1000;
+            NSLog(@"[线程2] 💤 退避 %lu μs 后重试 (防活锁)", (unsigned long)sleepUs);
+            usleep(sleepUs);
+        }
+        NSLog(@"[线程2] ❌ 超过最大重试次数，上报业务失败");
+    });
+    
+    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+        NSLog(@"🏆 方案2总结：tryLock 超时 + 倒序释放回滚 + 随机退避");
+        NSLog(@"   ✅ 优点：不要求全局锁顺序；跨团队/遗留代码接入成本低（局部即可生效");
+        NSLog(@"   ✅ 防止活锁（Livelock）关键：『随机退避』而非固定间隔，否则同时重试还是撞车");
+        NSLog(@"   ❌ 缺点：性能有折损（超时空等+重试）；极端情况下重试次数用尽仍会失败需上层兜底");
+        NSLog(@"   🧠 面试陷阱：只 tryLock 第二把失败后，务必『倒序释放所有已持锁』= 核心，否则依旧会发生部分持有导致的伪死锁");
+        NSLog(@"   🎯 适用：跨模块/遗留系统、加锁顺序无法统一、冲突概率低且有重试语义的场景");
+    });
+}
+
+#pragma mark ✅ 12. AB死锁 方案3：一次性申请所有资源（银行家算法雏形）
+- (void)demonstrateFix3_BankerAlgorithm {
+    NSLog(@"\n\n======= 【✅12】方案3：一次性申请所有资源（银行家算法雏形） =======\n");
+    NSLog(@"💡 原理：同时破坏『持有并等待』+『循环等待』两个条件。");
+    NSLog(@"   要么一次性原子性拿到所有需要的锁，要么一把都不拿 sleep 重试，不存在『拿了一半等另一半』的状态\n");
+    NSLog(@"🧠 面试考点：Dijkstra 银行家算法的极简版 —— 预检查『安全序列』；此处用一把全局 gate 模拟『原子批申请』\n");
+    
+    // 🔐 『资源管理中心』：所有锁的『原子申请/释放』都必须通过 gateLock 串行化
+    // 这是方案3的灵魂：没有 gate，检查与拿锁之间会有 TOCTOU 竞态
+    NSLock *gateLock = [[NSLock alloc] init];
+    NSLock *resA = [[NSLock alloc] init];
+    NSLock *resB = [[NSLock alloc] init];
+    
+    // 『资源状态』：true=已被占用，模拟『银行家算法 - 已分配矩阵』
+    __block BOOL resAHeld = NO;
+    __block BOOL resBHeld = NO;
+    const NSInteger kMaxPoll = 20;
+    
+    // 封装：原子性『一次性申请 A+B』 成功=YES 失败=NO（全程无任何持锁退出）
+    BOOL (^tryAcquireAll)(void) = ^BOOL{
+        [gateLock lock];  // 『预检查 + 分配』必须原子进入 gate
+        // 🧠 关键：只有当两个资源 ALL 空闲时才真正去 lock 它们
+        // 若有一个忙 → 直接返回，全程不持有任何业务锁 → 破坏持有并等待
+        if (resAHeld || resBHeld) {
+            NSLog(@"  [资源中心] 🚫 当前资源繁忙 (A=%d B=%d) → 本次一把都不拿", resAHeld, resBHeld);
+            [gateLock unlock];
+            return NO;
+        }
+        // 预检查通过 → 真正锁两个锁；在 gate 内顺序执行，保证『一次性完成』原子性
+        [resA lock]; resAHeld = YES;
+        [resB lock]; resBHeld = YES;
+        NSLog(@"  [资源中心] ✅ 原子分配 A+B 一次性分配成功");
+        [gateLock unlock];
+        return YES;
+    };
+    
+    void (^releaseAll)(NSString *) = ^(NSString *who){
+        [gateLock lock];
+        [resA unlock]; resAHeld = NO;
+        [resB unlock]; resBHeld = NO;
+        NSLog(@"  [%@] ♻️ A+B 一次性释放完成", who);
+        [gateLock unlock];
+    };
+    
+    dispatch_queue_t q1 = dispatch_queue_create("com.demo.thread1", DISPATCH_QUEUE_SERIAL);
+    dispatch_queue_t q2 = dispatch_queue_create("com.demo.thread2", DISPATCH_QUEUE_SERIAL);
+    dispatch_group_t group = dispatch_group_create();
+    
+    // 线程1：声明需要 A+B（不管内部顺序，批申请）
+    dispatch_group_async(group, q1, ^{
+        NSLog(@"[线程1] 📝 声明：本次事务需要资源 A + B，到资源中心申请");
+        for (NSInteger i = 1; i <= kMaxPoll; i++) {
+            BOOL ok = tryAcquireAll();
+            if (ok) break;
+            NSLog(@"[线程1] 💤 申请失败，轮询等待 (%ld/%ld) 10ms", (long)i, (long)kMaxPoll);
+            usleep(10000);
+        }
+        NSLog(@"[线程1] ✅ 进入双锁临界区执行 (0.3s)");
+        usleep(300000);
+        releaseAll(@"线程1");
+        NSLog(@"[线程1] 🎉 事务完成 ✅\n");
+    });
+    
+    // 线程2：也声明需要 A+B（故意与线程1在同一时刻竞争，验证无死锁
+    dispatch_group_async(group, q2, ^{
+        NSLog(@"[线程2] 📝 声明：本次事务需要资源 A + B，到资源中心申请");
+        for (NSInteger i = 1; i <= kMaxPoll; i++) {
+            BOOL ok = tryAcquireAll();
+            if (ok) break;
+            NSLog(@"[线程2] 💤 申请失败，轮询等待 (%ld/%ld) 10ms", (long)i, (long)kMaxPoll);
+            usleep(10000);
+        }
+        NSLog(@"[线程2] ✅ 进入双锁临界区执行 (0.3s)");
+        usleep(300000);
+        releaseAll(@"线程2");
+        NSLog(@"[线程2] 🎉 事务完成 ✅\n");
+    });
+    
+    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+        NSLog(@"🏆 方案3总结：资源中心 gate 原子性一次性申请所有资源（银行家算法雏形）");
+        NSLog(@"   ✅ 优点：彻底消除持有并等待，无死锁、无活锁；线程不需要知道对方存在");
+        NSLog(@"   ✅ 面试加分：TOCTOU 问题必须用 gateLock 把『预检查+分配』包成原子，否则 check 到 lock 间隙被别人抢走会误判");
+        NSLog(@"   ❌ 缺点：gate 成为性能瓶颈（全局串行）；粗粒度，极端情况并发会饥饿 资源多了银行家安全检查复杂度 O(m·n²)");
+        NSLog(@"   🎯 适用：数据库行锁/分布式锁（如 Redis Redlock）、资源数固定且少、需要严格『全有或全无』语义的事务性场景");
+    });
 }
 
 @end

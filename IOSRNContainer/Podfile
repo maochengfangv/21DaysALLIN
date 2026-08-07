@@ -23,6 +23,8 @@ target 'IOSRNContainer' do
   )
   pod 'react-native-safe-area-context', :path => File.join(rn_node_modules_path, 'react-native-safe-area-context')
 
+  pod 'RNBridgePodspec', :path => File.join(rn_app_path, 'ios/BridgePodspec')
+
   target 'IOSRNContainerTests' do
     inherit! :search_paths
   end
@@ -37,8 +39,6 @@ target 'IOSRNContainer' do
       :mac_catalyst_enabled => false
     )
 
-    # === 自动注入 ReactCodegen header 搜索路径 ===
-    # 让 IOSRNContainer target 可以 #import <MyRNAppSpecs/MyRNAppSpecs.h>
     installer.aggregate_targets.each do |aggregate_target|
       aggregate_target.user_project.targets.each do |target|
         next unless target.name == 'IOSRNContainer'
