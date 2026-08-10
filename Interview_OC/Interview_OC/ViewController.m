@@ -15,6 +15,161 @@
 
 static const NSInteger kLockBenchmarkCount = 1000000;
 
+#import <objc/runtime.h>
+#import <objc/message.h>
+
+#pragma mark - ⚙️ 辅助类 1: MySingleton (B3 dispatch_once 死锁演示)
+@interface MySingleton : NSObject
++ (instancetype)sharedInstance;
++ (instancetype)sharedDeadlockVersion;  // ❌ 故意在 init 里重入 shared = 死锁
+@end
+@implementation MySingleton
++ (instancetype)sharedInstance {
+    static MySingleton *instance; static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ instance = [[MySingleton alloc] init]; });
+    return instance;
+}
++ (instancetype)sharedDeadlockVersion {
+    static MySingleton *instance; static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        instance = [[MySingleton alloc] _initDeadlockVersion];
+    });
+    return instance;
+}
+- (instancetype)init { self = [super init]; return self; }
+// ❌ 故意在 init 内再次调用 sharedDeadlockVersion = 💀死锁
+- (instancetype)_initDeadlockVersion {
+    self = [super init];
+    if (self) {
+        NSLog(@"  💀 [死锁触发点] init内部 再次调用 sharedDeadlockVersion → 等once解锁 = 死锁!");
+        [MySingleton sharedDeadlockVersion];  // ← 💀 递归重入 dispatch_once = 死锁
+    }
+    return self;
+}
+@end
+
+#pragma mark - ⚙️ 辅助类 2: MessageFwdDemo (C1 消息转发3步演示)
+@interface MessageFwdDemo : NSObject
+// 注意：notExistMethod 没有任何声明和实现，调用时会走完整消息转发流程
+@end
+@interface FwdBackupTarget : NSObject
+- (void)notExistMethod:(NSString *)msg;
+@end
+@implementation FwdBackupTarget
+- (void)notExistMethod:(NSString *)msg {
+    NSLog(@"  🎯 [第2步备用实现] FwdBackupTarget 收到: %@ ✅", msg);
+}
+@end
+@implementation MessageFwdDemo
+
+// 🧠 [消息转发 Step 1] 动态方法解析：询问类是否要动态添加这个方法的实现
+//    返回 YES = runtime 认为方法已被加好，重新调 msgSend
++ (BOOL)resolveInstanceMethod:(SEL)sel {
+    NSLog(@"  [1/3] resolveInstanceMethod: 询问是否动态添加方法 %@", NSStringFromSelector(sel));
+    if (sel == @selector(notExistMethod:)) {
+        // 🧠 面试加分项：这里可以用 class_addMethod 动态加上 IMP；此处返回 NO 让流程继续到 forwardingTarget
+        return NO;  // 返回 NO → 进入 Step 2
+    }
+    return [super resolveInstanceMethod:sel];
+}
+
+// 🧠 [消息转发 Step 2] 备援接收者：是否有别的对象能处理这个消息？(快速转发,不创建NSInvocation)
+//    返回非 nil 对象 = runtime 把消息转发给该对象，最常用 性价比最高
+- (id)forwardingTargetForSelector:(SEL)aSelector {
+    NSLog(@"  [2/3] forwardingTargetForSelector: 询问是否有备援接收者处理 %@", NSStringFromSelector(aSelector));
+    if (aSelector == @selector(notExistMethod:)) {
+        FwdBackupTarget *backup = [FwdBackupTarget new];
+        NSLog(@"  → 返回备用对象 %@ 承接调用", backup);
+        return backup;  // ← ✅ 返回备用对象 = 到此为止，成功转发
+    }
+    return nil;  // 返回 nil → 进入 Step 3 (最重量级的完整转发)
+}
+
+// 🧠 [消息转发 Step 3] 完整消息转发：生成 NSInvocation，自己决定怎么处理(改变target/selector/参数)
+//    如果这里也没实现 → doesNotRecognizeSelector: 直接 crash unrecognized selector
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector {
+    NSLog(@"  [3/3] methodSignatureForSelector: 生成方法签名进入完整转发 %@", NSStringFromSelector(aSelector));
+    if (aSelector == @selector(notExistMethod:)) {
+        // 手动返回一个合适的签名: v@:@ = void return, id self, SEL cmd, id arg
+        return [NSMethodSignature signatureWithObjCTypes:"v@:@"];
+    }
+    return [super methodSignatureForSelector:aSelector];
+}
+- (void)forwardInvocation:(NSInvocation *)invocation {
+    NSLog(@"  [3/3] forwardInvocation: 完整转发 %@", NSStringFromSelector(invocation.selector));
+    // 这里可以改 target / 改参数 / 改 selector 自由发挥
+    FwdBackupTarget *t = [FwdBackupTarget new];
+    [invocation invokeWithTarget:t];
+}
+@end
+
+#pragma mark - ⚙️ 辅助类 3: Person Category (C3 关联对象 Associated Object 演示)
+@interface Person (Associated)
+@property (nonatomic, strong) NSNumber *extTag;  // Category 加属性必须用 Associated
+@property (nonatomic, copy) NSString *extName;
+@end
+static const void *kExtTagKey   = &kExtTagKey;
+static const void *kExtNameKey  = &kExtNameKey;
+@implementation Person (Associated)
+- (void)setExtTag:(NSNumber *)extTag {
+    // OBJC_ASSOCIATION_RETAIN_NONATOMIC = strong, nonatomic
+    objc_setAssociatedObject(self, kExtTagKey, extTag, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+- (NSNumber *)extTag {
+    return objc_getAssociatedObject(self, kExtTagKey);
+}
+- (void)setExtName:(NSString *)extName {
+    // OBJC_ASSOCIATION_COPY_NONATOMIC = copy, nonatomic
+    objc_setAssociatedObject(self, kExtNameKey, extName, OBJC_ASSOCIATION_COPY_NONATOMIC);
+}
+- (NSString *)extName {
+    return objc_getAssociatedObject(self, kExtNameKey);
+}
+@end
+
+#pragma mark - ⚙️ 辅助类 4: MethodSwizzleDemo (C2 Method Swizzling 坑演示)
+@interface SwizzleDemo : NSObject
+- (void)originalMethod;
++ (void)safeExchangeInstanceMethod:(SEL)origSel withMethod:(SEL)swizSel;
+@end
+@implementation SwizzleDemo
+- (void)originalMethod { NSLog(@"  🔵 原始方法 originalMethod 调用"); }
+- (void)swizzled_originalMethod { NSLog(@"  🟢 被交换后的方法: 先做埋点/统计 → 再递归调用'原方法'(此时已是交换过的 originalMethod IMP)"); [self swizzled_originalMethod]; }
+// 🧠 面试最坑：原方法可能未实现 OR 仅父类实现，直接 method_exchange = 修改父类 method list 💀污染所有子类！
+// 大厂标准安全思路：class_addMethod 原子占位 → 成功=本类没origM/继承父类 → class_replaceMethod 单独替换 swizSel IMP
+//                 → 失败=本类有origM → 安全 method_exchangeImplementations
++ (void)safeExchangeInstanceMethod:(SEL)origSel withMethod:(SEL)swizSel {
+    Method origM = class_getInstanceMethod(self, origSel);
+    Method swizM = class_getInstanceMethod(self, swizSel);
+    if (!swizM) { NSLog(@"  ⚠️ Swizzle 失败: swizSel %@ 不存在!", NSStringFromSelector(swizSel)); return; }
+    const char *types = method_getTypeEncoding(swizM);
+
+    // 🧠 [核心第 1 步] 尝试把 swizM 的 IMP 作为 origSel 的实现，加到『本类』的 method list 上
+    //   成功 = YES → origSel 在 本类 method list 不存在：
+    //       a) origM == nil      → 本类+父类都没实现
+    //       b) origM 非nil        → origM 是父类方法表的指针！直接 exchange = 改父类=污染其他子类💀
+    //   无论哪种，addMethod 成功后本类 origSel → swizIMP 的映射就『占坑』了，不会再碰到父类 method list
+    BOOL didAdd = class_addMethod(self, origSel, method_getImplementation(swizM), types);
+
+    if (didAdd) {
+        // 🧠 [核心第 2 步 didAdd = YES] 把 swizSel 的 IMP 替换为『原本 origSel 应有的 IMP』
+        //   origM != nil → 父类的 IMP，用户调用 swizzled 方法里 [self swizzled_xxx] 会走到父类原实现（等价 super）
+        //   origM == nil → 原类+父类都没 IMP！不能传 method_getImplementation(swizM)（会递归），显式塞空 IMP 兜底
+        IMP fallbackIMP = (IMP)imp_implementationWithBlock(^(id _self) {
+            NSLog(@"  ⚠️ [Swizzle兜底空IMP] %@ 的 origSel %@ 本类+父类均未实现，走到空IMP",
+                  NSStringFromClass(self), NSStringFromSelector(origSel));
+        });
+        IMP origOrNilIMP = origM ? method_getImplementation(origM) : fallbackIMP;
+        const char *origTypes = origM ? method_getTypeEncoding(origM) : types;
+        class_replaceMethod(self, swizSel, origOrNilIMP, origTypes);
+    } else {
+        // 🧠 [didAdd = NO] addMethod 失败 → 本类 method list 已经存在 origSel！
+        //   此时 origM 100% 指向 self.methodLists 内部（不是父类的），exchange 才是安全的
+        method_exchangeImplementations(origM, swizM);
+    }
+}
+@end
+
 @interface ViewController ()
 
 @property (nonatomic, strong) Person *person;
@@ -33,6 +188,18 @@ static const NSInteger kLockBenchmarkCount = 1000000;
 
 @property (nonatomic, assign) NSInteger unsafeCounter;
 @property (nonatomic, assign) NSInteger safeCounter;
+
+// ====== 以下为新增面试 Demo 属性 ======
+// Block & 内存管理
+@property (nonatomic, copy) void (^retainCycleBlock)(void);
+@property (nonatomic, strong) dispatch_source_t gcdTimer;
+
+// 多读单写（Barrier 经典题）
+@property (nonatomic, strong) dispatch_queue_t barrierQueue;
+@property (nonatomic, strong) NSMutableDictionary *sharedData;
+
+// Runtime 方法交换计数
+@property (nonatomic, assign) NSInteger swizzleHookCount;
 
 @end
 
@@ -77,8 +244,51 @@ static const NSInteger kLockBenchmarkCount = 1000000;
     // 11. 方案2：tryLock 超时回滚 + 随机退避重试
 //    [self demonstrateFix2_TryLockTimeout];
     // 12. 方案3：一次性申请所有资源（银行家算法雏形）
-    [self demonstrateFix3_BankerAlgorithm];
+//    [self demonstrateFix3_BankerAlgorithm];
     
+    
+    // ====== 🧠 新增：6大面试核心模块（按需解除注释执行） ======
+    
+    // ====== 【A. Block & 内存管理】 ======
+    // A1. Block 三种类型（NSGlobalBlock / NSStackBlock / NSMallocBlock）
+//    [self demonstrateBlockTypes];
+    // A2. Block 循环引用 + 3 种解法（weak/strong dance / __block / NSBlockOperation）
+//    [self demonstrateBlockRetainCycle];
+    // A3. 属性关键字对比 (atomic/nonatomic/strong/weak/assign/copy)
+//    [self demonstratePropertyKeywords];
+    // A4. __weak vs __unsafe_unretained 最本质区别
+//    [self demonstrateWeakVsUnsafeUnretained];
+    // A5. AutoreleasePool 什么时候释放？（子线程手动创建 + 嵌套池）
+//    [self demonstrateAutoreleasePool];
+    
+    // ====== 【B. GCD 进阶】 ======
+    // B1. dispatch_barrier 多读单写（经典读写锁面试题）
+//    [self demonstrateBarrierReadWrite];
+    // B2. dispatch_group 多任务依赖（3 个并发任务都完成后回调）
+//    [self demonstrateDispatchGroup];
+    // B3. dispatch_once 单例 + 重入死锁陷阱（经典面试坑）
+//    [self demonstrateDispatchOnceDeadlock];
+    // B4. dispatch_source 定时器（比 NSTimer 准，不依赖 RunLoop）
+//    [self demonstrateGCDTimer];
+    
+    // ====== 【C. ObjC Runtime】 ======
+    // C1. 消息转发完整流程 3 步（resolve / forwardingTarget / methodSignature）
+//    [self demonstrateMessageForwarding];
+    // C2. Method Swizzling 方法交换 + 最容易踩的坑（原方法未实现导致崩溃）
+    [self demonstrateMethodSwizzling];
+    // C3. 关联对象 Associated Object（给 Category 添加属性的原理）
+//    [self demonstrateAssociatedObject];
+    
+    // ====== 【D. 事件响应链 & 绘制】 ======
+    // D1. hitTest:withEvent: 查找最佳响应者（扩大点击区域经典题）
+    // 在本文件末尾有 explainHitTestAlgorithm 注释讲解
+    
+    // ====== 【E. KVO 底层】 ======
+    // E1. KVO 的 isa-swizzling 本质（NSKVONotifying_XXX 动态子类）
+//    [self demonstrateKVOIsaSwizzling];
+    
+    // ====== 【F. 单例设计】 ======
+    // F1. 单例三种写法对比（加锁/once/atomic）
     //    // 1. 创建 Person 实例
     //    self.person = [[Person alloc] initWithName:@"张三" age:25];
     //
@@ -1230,6 +1440,274 @@ static const NSInteger kLockBenchmarkCount = 1000000;
         NSLog(@"   ❌ 缺点：gate 成为性能瓶颈（全局串行）；粗粒度，极端情况并发会饥饿 资源多了银行家安全检查复杂度 O(m·n²)");
         NSLog(@"   🎯 适用：数据库行锁/分布式锁（如 Redis Redlock）、资源数固定且少、需要严格『全有或全无』语义的事务性场景");
     });
+}
+
+#pragma mark - ========== 🧠【A. Block & 内存管理】 ==========
+
+#pragma mark A1. Block 三种类型 (Global / Stack / Malloc)
+- (void)demonstrateBlockTypes {
+    NSLog(@"\n\n======= 【A1】Block 三种存储类型 =======\n");
+    NSLog(@"🧠 面试考点：Block 本质是『封装了函数调用 + 捕获变量』的结构体对象，分 3 类存放在不同区域");
+    NSLog(@"   关键：__block 会将变量拷贝到堆上，实现 block 内外修改同一变量");
+    
+    // --- 类型 1：NSGlobalBlock（全局区，不捕获外部变量 或 只捕获静态/全局变量） ---
+    void (^globalBlock)(void) = ^{ NSLog(@"  我没有捕获外部 auto 变量"); };
+    NSLog(@"[A1-1] 无捕获 → %@ (地址=%p)\n", NSStringFromClass([globalBlock class]), globalBlock);
+    
+    // --- 类型 2：NSStackBlock（栈区，MRC 下才直接出现；ARC 下编译器一般自动 copy 到堆） ---
+    // 🧠 面试考点：ARC 下『直接打印』通常会看到是 MallocBlock，因为编译器自动 copy 了；
+    //   但把 block 直接作为参数传给不 copy 的方法（如 performSelector）仍可能是栈 block，出栈野指针崩溃！
+    int a = 10;
+    void (^stackBlock)(void) = ^{ NSLog(@"  捕获了局部变量 a=%d", a); };
+    NSLog(@"[A1-2] 捕获 auto 局部变量 → %@ (地址=%p)\n", NSStringFromClass([stackBlock class]), stackBlock);
+    
+    // --- 类型 3：NSMallocBlock（堆区，栈 block 被 copy 后） ---
+    void (^mallocBlock)(void) = [stackBlock copy];
+    NSLog(@"[A1-3] stackBlock 被 copy → %@ (地址=%p)\n", NSStringFromClass([mallocBlock class]), mallocBlock);
+    
+    // --- __block 关键字演示：允许 block 内修改外部 auto 变量 ---
+    __block NSInteger modifyCount = 0;
+    void (^__block blockDemo)(void) = ^{
+        modifyCount++;  // 没有 __block 这里编译报错！ Variable is not assignable (missing __block type specifier)
+        NSLog(@"  [A1-4] __block 变量在 block 内部修改: modifyCount=%ld", (long)modifyCount);
+    };
+    blockDemo();
+    NSLog(@"  [A1-4] block 执行后, 外部 modifyCount 同步更新为: %ld ✅\n", (long)modifyCount);
+    
+    NSLog(@"💡 记忆口诀：不捕全局(Global)，捕获局部先栈(Stack)再堆(Malloc)；栈 copy = 堆\n");
+    NSLog(@"======= 【A1】Block 类型演示完毕 ✅ =======\n");
+}
+
+#pragma mark A2. Block 循环引用 + 3 种标准解法
+- (void)demonstrateBlockRetainCycle {
+    NSLog(@"\n\n======= 【A2】Block 循环引用 + 3 种解法 =======\n");
+    NSLog(@"🧠 面试考点：self → block(copy到堆) → 捕获self → 闭环 = 经典循环引用！");
+    
+    // --- ❌ 错误写法：直接在 block 内引用 self，造成循环引用 --- 
+    //    self.retainCycleBlock = ^{ NSLog(@"  [❌] 直接捕获 self = %p", self); };
+    //    NSLog(@"  [❌] self(%p) -> retainCycleBlock -> 捕获self -> 循环引用!", self);
+    
+    // --- ✅ 解法 1：__weak + __strong dance（最常用，推荐写法） ---
+    NSLog(@"\n--- 解法 1: __weak self + __strong self 防止中途释放 ---");
+    __weak typeof(self) weakSelf = self;
+    self.retainCycleBlock = ^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) { NSLog(@"    strongSelf 为 nil，说明 self 已被释放，提前 return"); return; }
+        NSLog(@"    strongSelf 安全访问: self = %p", strongSelf);
+    };
+    self.retainCycleBlock();
+    NSLog(@"  ✅ 解法 1: weak/strong dance 无循环引用");
+    NSLog(@"  🧠 为何要 strong？weak 在执行中可能被置 nil（如 AFN 回调中途页面 pop），strong 保证一次执行内生命周期一致");
+    
+    // --- ✅ 解法 2：__block 变量（MRC 时代常用，ARC 下需手动置 nil 打破循环） ---
+    NSLog(@"\n--- 解法 2: __block + 手动 break（ARC 下必须在 block 末尾显式置 nil） ---");
+    __block ViewController *blockSelf = self;  // block 捕获 blockSelf 指针（在堆上）
+    self.retainCycleBlock = ^{
+        NSLog(@"    __block blockSelf = %p", blockSelf);
+        // 🧠 面试坑：ARC 下 __block 会 retain 对象！必须执行一次以下语句才能打破：
+        blockSelf = nil;  // ← 关键！不执行这行 = 仍循环引用（MRC 下 __block 不会 retain）
+    };
+    self.retainCycleBlock();
+    NSLog(@"  ✅ 解法 2: __block + block内置nil 打破引用环");
+    NSLog(@"  🧠 面试对比：MRC vs ARC 下 __block 的行为差异 = MRC 不retain，ARC 默认 retain!");
+    
+    // --- ✅ 解法 3：显式传参（把 self 当参数传入，不捕获） ---
+    NSLog(@"\n--- 解法 3: 把 self 当参数传入 block，不发生捕获 ---");
+    void (^paramBlock)(ViewController *) = ^(ViewController *vc) {
+        NSLog(@"    传参 vc = %p，不形成捕获", vc);
+    };
+    paramBlock(self);
+    NSLog(@"  ✅ 解法 3: 参数传递 = 无捕获 → 无循环引用（NSOperation/NSURLSession API 天然支持）");
+    
+    // 清理
+    self.retainCycleBlock = nil;
+    NSLog(@"\n======= 【A2】Block 循环引用演示完毕 ✅ =======\n");
+}
+
+#pragma mark A3. 属性关键字对比 (最常问的 copy/strong/assign/weak/atomic)
+- (void)demonstratePropertyKeywords {
+    NSLog(@"\n\n======= 【A3】属性关键字对比：copy vs strong vs assign vs weak vs atomic =======\n");
+    NSLog(@"🧠 这是 iOS 一面最高频题，背熟下表 + 以下运行时验证！");
+    
+    // --- 核心 1: 为什么 NSString/NSArray/NSDictionary 用 copy 而不是 strong? ---
+    NSMutableString *mutableName = [NSMutableString stringWithString:@"张三"];
+    
+    // 模拟 strong 语义：直接赋值 = 指针拷贝，外部修改会影响内部
+    Person *pStrong = [[Person alloc] init];
+    pStrong.name = mutableName;     // 即使声明是 copy，运行时都会 copy 一份不可变副本
+    [mutableName appendString:@"(被篡改)"];
+    NSLog(@"[copy] 外部 mutableName=%@  →  Person.name=%@  ✅ copy 关键字保护了内部不受外部篡改",
+          mutableName, pStrong.name);
+    
+    // 🧠 面试点：如果把 name 声明成 strong，那么 mutableName 被修改时，p.name 会跟着变（指向同一对象）
+    //   所以：『有可变子类的不可变类属性』必须用 copy = NSStr/NSArr/NSDict/NSBlock etc.
+    
+    // --- 核心 2: assign 基本不会用在对象上，否则野指针崩溃 --- 
+    // 声明 assign 的对象属性：dealloc 后指针不会自动置 nil，悬垂指针访问 = EXC_BAD_ACCESS
+    NSLog(@"\n[assign vs weak 本质区别表]");
+    NSLog(@"  ┌──────────────┬─────────────────────┬──────────────────────────┐");
+    NSLog(@"  │   关键字      │   引用计数变化        │    对象销毁后指针行为        │");
+    NSLog(@"  ├──────────────┼─────────────────────┼──────────────────────────┤");
+    NSLog(@"  │   strong     │   retain +1         │    不销毁(自己持有)         │");
+    NSLog(@"  │   weak       │   不变（不 retain）   │    自动置 nil ⭐️          │");
+    NSLog(@"  │   assign     │   不变（不 retain）   │    悬垂指针 → 野指针崩溃     │");
+    NSLog(@"  │   copy       │   不可变副本 +1       │    不销毁(自己持有副本)      │");
+    NSLog(@"  └──────────────┴─────────────────────┴──────────────────────────┘");
+    NSLog(@"  🧠 用途：assign 仅用于基本类型(int/NSInteger/CGFloat)等非对象；delegate 必须 weak");
+    
+    // --- 核心 3: atomic 为什么不常用？ ---
+    NSLog(@"\n[atomic vs nonatomic 本质]");
+    NSLog(@"  atomic   : setter/getter 加自旋锁(os_unfair_lock)，保证『单个属性读写原子』→ 慢 10~20x");
+    NSLog(@"  nonatomic: 不加锁 → 快，iOS 项目几乎全局 nonatomic");
+    NSLog(@"  🧠 面试陷阱：atomic ≠ 线程安全！它只是保证 self.obj = A 和 B = self.obj 是原子的；");
+    NSLog(@"     但 self.obj.prop = xxx  /  [self.array addObject:xxx] 这种复合操作 atomic 不管，");
+    NSLog(@"     真实项目要线程安全必须自己加锁 (见你之前的 Demo2 线程安全)");
+    
+    NSLog(@"\n======= 【A3】属性关键字演示完毕 ✅ =======\n");
+}
+
+#pragma mark - ========== 🧠【C. ObjC Runtime】 ==========
+
+#pragma mark C1. 消息转发完整流程 3 步
+- (void)demonstrateMessageForwarding {
+    NSLog(@"\n\n======= 【C1】消息转发完整流程 3 步（最完整 Demo】 =======\n");
+    NSLog(@"🧠 面试必背：objc_msgSend 找方法找不到实现时，进入消息转发 3 步链（由轻到重）:");
+    NSLog(@"  Step① resolveInstanceMethod:  → 本类动态添加方法IMP（最轻量 推荐用它加方法）");
+    NSLog(@"  Step② forwardingTargetForSelector: → 换个对象处理（快速转发，无NSInvocation开销极小 最常用）");
+    NSLog(@"  Step③ methodSignature + forwardInvocation: → 生成NSInvocation自由改（开销大 完整转发");
+    NSLog(@"  全失败→ doesNotRecognizeSelector  💀 崩溃 unrecognized selector");
+    NSLog(@"  ");
+    
+    MessageFwdDemo *demo = [MessageFwdDemo new];
+    NSLog(@"🚀 调用一个本类完全没有实现的方法 → 触发完整 3 步消息转发链...\n");
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+    // performSelector:withObject: 内部同样走 objc_msgSend → 消息转发链路，对面试演示完全等价
+    // 用 clang diagnostic push/pop 屏蔽 performSelector 可能不存在方法的 warning，因为我们就是故意不实现让它走转发
+    [demo performSelector:@selector(notExistMethod:) withObject:@"Hello Runtime 消息转发测试"];
+#pragma clang diagnostic pop
+    
+    NSLog(@"\n🏆 面试总结：3步转发的选型建议  ");
+    NSLog(@"  · 90% 场景用 resolveInstanceMethod: 加IMP（最快，动态解析）最");
+    NSLog(@"  · 多对象代理/MulticastDelegate协议用 forwardingTarget 性能好");
+    NSLog(@"  · 复杂重写参数/变方法/变形参 NSInvocation 用第三步forwardInvocation");
+    NSLog(@"  附加坑点：第三步 method签名不对会 crash，v@:@ 表示 void(id,SEL,id) ");
+    NSLog(@"\n======= 【C1】消息转发演示完毕 ✅ =======\n");
+}
+
+#pragma mark C2. Method Swizzling 方法交换 + 最大坑（原方法未实现崩溃）
+- (void)demonstrateMethodSwizzling {
+    NSLog(@"\n\n======= 【C2】Method Swizzling + 最大安全写法 =======\n");
+    NSLog(@"🧠 面试最常问：方法交换为啥会 crash？直接交换父类没实现的本类方法 = 影响所有子类调用都替换掉父类原始方法！");
+    NSLog(@"  🏆安全铁律：先 class_addMethod 把 swizzledIMP 塞给 originalSel.成功=原来没实现 再替换 = 不会污染其他类");
+    
+    // 🌰 unsafe 写法（网上90%都是这个坑，直接 method_exchangeImplementations 了事
+    SwizzleDemo *demo1 = [SwizzleDemo new];
+    NSLog(@"\n  [Before Swizzle] 调用 originalMethod");
+    [demo1 originalMethod];  // 走原本蓝色IMP
+    
+    // ✅ Safe Swizzle (调用安全写法
+    [SwizzleDemo safeExchangeInstanceMethod:@selector(originalMethod) withMethod:@selector(swizzled_originalMethod)];
+    SwizzleDemo *demo2 = [SwizzleDemo new];
+    NSLog(@"\n  [After  Safe Swizzle] 调用 originalMethod → 此时已被交换");
+    [demo2 originalMethod];  // 实际调用 swizzled_originalMethod 先埋点再递归调用自己(此时自己已是原方法)
+    
+    NSLog(@"\n🏆 大厂标准安全 Swizzle 『5 行公式代码』（面试直接背）：");
+    NSLog(@"    ① Method orig = class_getInstanceMethod(cls, origSel);");
+    NSLog(@"    ② Method swiz = class_getInstanceMethod(cls, swizSel);");
+    NSLog(@"    ③ BOOL didAdd = class_addMethod(cls, origSel, method_getImplementation(swiz), methodTypeEncoding);");
+    NSLog(@"    ④ if (didAdd)  class_replaceMethod(cls, swizSel, origM?origIMP:空兜底IMP, ...);");
+    NSLog(@"         ↳ add成功=本类没origM(=继承父类或未实现) → 单独替换swizSel，绝不改父类 method list⭐️");
+    NSLog(@"    ⑤ else        method_exchangeImplementations(orig, swiz);");
+    NSLog(@"         ↳ add失败=本类本身就有origSel → orig在本类method list，exchange才安全⭐️");
+    NSLog(@"  🧠 面试灵魂拷问三连：");
+    NSLog(@"    Q1为啥不用直接exchange？→ orig为父类方法的话=污染所有子类💀");
+    NSLog(@"    Q2class_addMethod成功代表啥？→ 本类method list原来没有origSel，占坑成功");
+    NSLog(@"    Q3origM==nil时class_replaceMethod传啥？→ 显式空IMP兜底，别传swizM自己的IMP会递归死循环💀");
+    NSLog(@"  ");
+    NSLog(@"🟢 常见应用：AOP 埋点 / VC生命周期Inject / 网络请求防重复 / YA 防崩溃");
+    NSLog(@"🔴 常见坑：+load 里 写 dispatch_once 保证只交换一次，不写+多次类加载来来回回换乱套.");
+    NSLog(@"\n======= 【C2】Method Swizzling 演示完毕 ✅ =======\n");
+}
+
+#pragma mark C3. Associated Object 关联对象（Category 加属性原理）
+- (void)demonstrateAssociatedObject {
+    NSLog(@"\n\n======= 【C3】关联对象 Associated Object（Category 添加属性原理） =======\n");
+    NSLog(@"🧠 面试点：Category 在 .h 写 @property 只会生成 getter/setter 声明，不会生成下划线成员变量");
+    NSLog(@"   所以 .m 里必须用 objc_setAssociatedObject / objc_getAssociatedObject 手动实现存读");
+    NSLog(@"   本质：底层用 AssociationsHashMap 存 (类对象指针 → ObjectAssociationMap 多个(key → value+policy))");
+    NSLog(@"   存储在 SideTables 散列表中，不在对象本身内存里（这也是为啥 Category 不能直接加ivar）\n");
+    
+    Person *p1 = [[Person alloc] initWithName:@"张三" age:25];
+    NSLog(@"  [Before设置前 p1.extTag = %@ (初始为 nil ✅", p1.extTag);
+    // 写 Category 添加两个关联对象
+    p1.extTag   = @(999);
+    p1.extName  = @"[Associated附加名";
+    NSLog(@"  [设置后] p1.extTag = %@", p1.extTag);
+    NSLog(@"  [设置后] p1.extName = %@", p1.extName);
+    
+    Person *p2 = [[Person alloc] initWithName:@"李四" age:30];
+    NSLog(@"  [另一个实例互不影响] p2.extTag = %@，p2.extName = %@", p2.extTag, p2.extName);
+    
+    NSLog(@"\n🧠 面试5种 policy 和 property 的对应关系（背）：");
+    NSLog(@"  ┌───────────────────────────────────┬────────────────────────┐");
+    NSLog(@"  │  objc_AssociationPolicy            │  @property等效       │");
+    NSLog(@"  ├───────────────────────────────────┼────────────────────────┤");
+    NSLog(@"  │  OBJC_ASSOCIATION_ASSIGN         │  assign             │");
+    NSLog(@"  │  OBJC_ASSOCIATION_RETAIN_NONATOMIC│  strong, nonatomic  │");
+    NSLog(@"  │  OBJC_ASSOCIATION_COPY_NONATOMIC  │  copy, nonatomic    │");
+    NSLog(@"  │  OBJC_ASSOCIATION_RETAIN        │  strong, atomic(rarely)│");
+    NSLog(@"  │  OBJC_ASSOCIATION_COPY          │  copy, atomic(rarely)│");
+    NSLog(@"  └───────────────────────────────────┴────────────────────────┘");
+    NSLog(@"  Key的最佳实践：static const void *kKey = &kKey;（静态变量指针地址=唯一全局不冲突）");
+    NSLog(@"\n======= 【C3】关联对象演示完毕 ✅ =======\n");
+}
+
+#pragma mark - ========== 🧠【E. KVO 底层本质】 ==========
+
+#pragma mark E1. KVO 的 isa-swizzling 本质（NSKVONotifying_ 动态子类）
+- (void)demonstrateKVOIsaSwizzling {
+    NSLog(@"\n\n======= 【E1】KVO 本质 = isa-swizzling 动态子类 =======\n");
+    NSLog(@"🧠 面试必背：KVO 是用 Runtime isa-swizzling 实现，Apple 文档写的 6 个关键步骤：");
+    NSLog(@"  ① addObserver时 Runtime动态生成 NSKVONotifying_XXX 子类继承原类");
+    NSLog(@"  ② 把被观察对象的 isa 指针改指向这个新子类（所以 class）");
+    NSLog(@"  ③ 子类重写 class 方法，返回原类 class(欺骗开发者以为类名还是原类");
+    NSLog(@"  ④ 子类重写被观察key的 setter → willChange → 调父setter → didChange → 通知observer");
+    NSLog(@"  ⑤ _isKVOA 标记返回 YES");
+    NSLog(@"  ⑥ 自动手动KVO移除全部移除后isa指回原类，子类不销毁（缓存优化复用\n");
+    
+    Person *pNoKVO = [[Person alloc] initWithName:@"无KVO" age:20];
+    Person *pWithKVO = [[Person alloc] initWithName:@"有KVO" age:22];
+    
+    NSLog(@"  🔵 【Before 添加 KVO 之前：");
+    NSLog(@"     无KVO对象: isa指向 %s", class_getName(object_getClass(pNoKVO)));
+    NSLog(@"     有KVO对象: isa指向 %s", class_getName(object_getClass(pWithKVO)));
+    NSLog(@"     [pWithKVO class] = %@", [pWithKVO class]);  // 这里还没加，都为Person
+    NSString *fmt = @"     object_getClass 返回实际指向的类，[obj class]被重写返回原类隐藏子类⭐️";
+    NSLog(@"%@", fmt);
+    
+    // 添加KVO观察
+    [pWithKVO addObserver:self forKeyPath:@"age" options:NSKeyValueObservingOptionNew context:nil];
+    
+    NSLog(@"\n  🟢 【After】添加 KVO 之后⭐️⭐️⭐️：");
+    NSLog(@"     无KVO对象: isa指向 %s (还是原来的Person ✔️", class_getName(object_getClass(pNoKVO)));
+    Class kvoCls = object_getClass(pWithKVO);
+    NSLog(@"     有KVO对象: isa指向 %s ←⭐️⭐️⭐️ 被Runtime动态子类！", class_getName(kvoCls));
+    NSLog(@"     [pWithKVO class] = %@ ← class方法被重写返回原类Person", [pWithKVO class]);
+    NSLog(@"     动态子类 superclass = %@", [kvoCls superclass]);
+    NSLog(@"     _isKVOA == %@", [pWithKVO valueForKey:@"_isKVO"] ?: @"(YES非公开但存在方法返回");
+    
+    // 触发 setter → 内部会调用 Foundation 的 _NSSetLongLongValueAndNotify 类似IMP
+    pWithKVO.age = 25;  // 触发 observeValue 回调
+    
+    // 移除后 isa 恢复
+    [pWithKVO removeObserver:self forKeyPath:@"age"];
+    NSLog(@"\n  🔴 【移除KVO后】:");
+    NSLog(@"     有KVO对象isa回到: %s ✅", class_getName(object_getClass(pWithKVO)));
+    
+    NSLog(@"\n🏆 面试延伸：手动KVO手动实现 willChangeValueForKey + didChange 才能手动触发\n");
+    NSLog(@"  常见考点：直接改成员变量会不会触发 KVO？(不会，因为没走setter，必须手动加will+did)");
+    NSLog(@"\n======= 【E1】KVO isa-swizzling 演示完毕 ✅ =======\n");
 }
 
 @end
