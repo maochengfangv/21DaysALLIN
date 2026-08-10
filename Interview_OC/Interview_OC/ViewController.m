@@ -127,6 +127,82 @@ static const void *kExtNameKey  = &kExtNameKey;
 }
 @end
 
+#pragma mark - ⚙️ 辅助类 5: HitTestBigAreaButton (D1 hitTest 扩大点击区域经典题)
+@interface HitTestBigAreaButton : UIButton
+/// 点击区域外扩 pt 数(默认20pt,面试题经典答案: 小按钮小于44x44时外扩到44)
+@property (nonatomic, assign) UIEdgeInsets hitTestEdgeInsets;
+@end
+@implementation HitTestBigAreaButton
+- (instancetype)initWithFrame:(CGRect)frame {
+    if (self = [super initWithFrame:frame]) {
+        // 🧠 经典 HIG 规范：可点击区域建议 ≥ 44x44pt，小于此的按钮必须外扩。默认外扩 20pt 四周
+        _hitTestEdgeInsets = UIEdgeInsetsMake(-20, -20, -20, -20);
+    }
+    return self;
+}
+
+// 🧠 面试必背：扩大点击区域的标准实现
+//   重写 pointInside:withEvent: 即可，系统 hitTest 会递归调用此方法判定『点是否在本视图内』
+//   不直接重写 hitTest 的原因：hitTest 要处理子视图递归遍历，易写出 bug；pointInside 只负责本视图判定职责单一
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    // 1. 把 bounds 按指定外扩 inset『反向』得到更大的判定矩形
+    //    UIEdgeInsetsMake(top,left,bottom,right) 正数=向内缩 负数=向外扩
+    CGRect expandedRect = UIEdgeInsetsInsetRect(self.bounds, self.hitTestEdgeInsets);
+    // 2. 判断点是否在『外扩后的大矩形』里
+    BOOL inside = CGRectContainsPoint(expandedRect, point);
+    if (inside) {
+        NSLog(@"  🎯 [HitTest命中] HitTestBigAreaButton[%@] 原始bounds=%@ → 外扩hitRect=%@ → point=%@ → 命中✅",
+              self.accessibilityLabel ?: @"smallBtn",
+              NSStringFromCGRect(self.bounds),
+              NSStringFromCGRect(expandedRect),
+              NSStringFromCGPoint(point));
+    }
+    return inside;
+}
+
+// 🧠 进阶：如果完全自定义命中逻辑，才重写 hitTest:withEvent:（注意 super 调用会递归子视图）
+//   系统默认实现流程（面试逐字背）:
+//   ① 自己 view.userInteractionEnabled=NO / hidden=YES / alpha<0.01 / pointInside=NO → return nil
+//   ② 倒序遍历自己的子视图(subviews数组从后往前=后加的先查,渲染在上层)
+//   ③ 对每个子视图 把点 convert 到子视图坐标系 → [subview hitTest:point withEvent:event]
+//   ④ 子视图返回非nil → 直接return 该值(命中了子链)
+//   ⑤ 所有子视图都返回nil → return self (命中了自己)
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *result = [super hitTest:point withEvent:event];
+    if (result) {
+        NSLog(@"  🔍 [hitTest返回] 最终命中视图 = %@ (指针=%p)", NSStringFromClass([result class]), result);
+    }
+    return result;
+}
+@end
+
+#pragma mark - ⚙️ 辅助类 6: GestureTrackButton (D1手势冲突 可视化Demo)
+// 🧠 面试题：父视图加了 UITapGestureRecognizer 为什么子按钮 addTarget 不触发？
+//   原因：Gesture 识别成功 → 系统自动调用 View 的 touchesCancelled:withEvent: 中断 View 内部触摸识别
+//   本类重写 3 个 touches 生命周期方法打印日志，证明 touchesCancelled ✅ 真的被调用了
+@interface GestureTrackButton : UIButton
+@property (nonatomic, copy) NSString *caseTag;  // 标记是 Case A/B/C 的哪个按钮
+@end
+@implementation GestureTrackButton
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    NSLog(@"    🟡 [%@] touchesBegan 被调用 (系统把触摸交给了按钮)", self.caseTag);
+    [super touchesBegan:touches withEvent:event];
+}
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    NSLog(@"    ❌ [%@] touchesCancelled 被调用! = Gesture 识别成功，系统强制中断按钮触摸响应链 💥", self.caseTag);
+    NSLog(@"        👉 面试关键点：一旦 touchesCancelled，touchesEnded 永远不会调用 → addTarget 的 TouchUpInside 必然不触发");
+    [super touchesCancelled:touches withEvent:event];
+}
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    NSLog(@"    🟢 [%@] touchesEnded 正常调用 → 按钮 addTarget TouchUpInside 会正常触发 ✅", self.caseTag);
+    [super touchesEnded:touches withEvent:event];
+}
+- (void)sendAction:(SEL)action to:(id)target forEvent:(UIEvent *)event {
+    NSLog(@"    ✅ [%@] sendAction:%@ 触发 (target=%@) = addTarget 真的执行了", self.caseTag, NSStringFromSelector(action), target);
+    [super sendAction:action to:target forEvent:event];
+}
+@end
+
 #pragma mark - ⚙️ 辅助类 4: MethodSwizzleDemo (C2 Method Swizzling 坑演示)
 @interface SwizzleDemo : NSObject
 - (void)originalMethod;
@@ -275,13 +351,13 @@ static const void *kExtNameKey  = &kExtNameKey;
     // C1. 消息转发完整流程 3 步（resolve / forwardingTarget / methodSignature）
 //    [self demonstrateMessageForwarding];
     // C2. Method Swizzling 方法交换 + 最容易踩的坑（原方法未实现导致崩溃）
-    [self demonstrateMethodSwizzling];
+//    [self demonstrateMethodSwizzling];
     // C3. 关联对象 Associated Object（给 Category 添加属性的原理）
 //    [self demonstrateAssociatedObject];
     
     // ====== 【D. 事件响应链 & 绘制】 ======
-    // D1. hitTest:withEvent: 查找最佳响应者（扩大点击区域经典题）
-    // 在本文件末尾有 explainHitTestAlgorithm 注释讲解
+    // D1. hitTest 查找最佳响应者 + 响应链传递 + 扩大点击区域（一面必考）
+    [self demonstrateHitTestAndResponderChain];
     
     // ====== 【E. KVO 底层】 ======
     // E1. KVO 的 isa-swizzling 本质（NSKVONotifying_XXX 动态子类）
@@ -338,8 +414,8 @@ static const void *kExtNameKey  = &kExtNameKey;
          → CFRunLoopStop → threadEntry 的 run 返回
          → 线程退出 ✅
      */
-    [self startWorkThread];
-    [self scheduleDelayedTasks];
+//    [self startWorkThread];
+//    [self scheduleDelayedTasks];
 }
 
 #pragma mark - 1. 启动常驻子线程
@@ -1661,6 +1737,234 @@ static const void *kExtNameKey  = &kExtNameKey;
     NSLog(@"  └───────────────────────────────────┴────────────────────────┘");
     NSLog(@"  Key的最佳实践：static const void *kKey = &kKey;（静态变量指针地址=唯一全局不冲突）");
     NSLog(@"\n======= 【C3】关联对象演示完毕 ✅ =======\n");
+}
+
+#pragma mark - ========== 🧠【D. 事件响应链 & 绘制】 ==========
+
+#pragma mark D1. hitTest + Responder Chain 响应链传递（一面必考题）
+- (void)demonstrateHitTestAndResponderChain {
+    NSLog(@"\n\n======= 【D1】hitTest 命中查找 + 响应链传递（一面必考经典题） =======\n");
+    NSLog(@"🧠 本题 iOS 一面 90% 概率出现，分『2 阶段』背：");
+    NSLog(@"  阶段 1【命中测试 Hit Testing】：从 UIWindow 向下递归找到『点中最上面的那个 View』= hit-test view \n 阶段 2【响应链 Responder Chain】：如果 hit-test view 不处理事件 → nextResponder 往上冒泡");
+    
+    // ====== Stage A: 模拟命中测试 ======
+    NSLog(@"▶️ [Stage 1 / 2 命中测试 hitTest 算法]");
+    NSLog(@"  系统标准流程 (用户手指触摸屏幕 → 压入 IOHIDEventSystem → SpringBoard → App进程主线程 RunLoop Source1 回调):");
+    NSLog(@"    ① [UIApplication sendEvent:] 把 UIEvent 分发给 UIWindow \n ② [UIWindow hitTest:withEvent:] → 判定点是否在 window 内 → 倒序遍历 subviews(VC.view 等) \n③ [superview hitTest:] → pointInside=YES → 倒序遍历自己 subviews → convertPoint → 递归子 hitTest \n④ 子视图返回非 nil → 直接返回；子视图全部 nil → return self \n ⑤ 层层向上返回 → 最终得到 hit-test view = FirstResponder 第一响应者候选人");
+    // 模拟常见排除条件（面试必答返回 nil 的 4 种情况）
+    NSLog(@"  ⚠️ 面试必背：hitTest: 返回 nil 的 4 种经典情况（不参与响应）:");
+    NSLog(@"    ① view.userInteractionEnabled = NO  (如 UILabel/UIImageView 默认) \n② view.hidden = YES \n③ view.alpha < 0.01 (透明不可见) \n④ [view pointInside:point withEvent:event] = NO (点不在本视图区域内)");
+    
+    // 创建一个 20x20 的『小按钮』(小于 HIG 推荐 44x44) → 会命中测试外扩到 60x60 的有效区域
+    HitTestBigAreaButton *smallBtn = [HitTestBigAreaButton new];
+    smallBtn.frame = CGRectMake(100, 100, 20, 20);
+    smallBtn.accessibilityLabel = @"20x20小按钮";
+    [smallBtn addTarget:self action:@selector(_smallBtnTapped:) forControlEvents:UIControlEventTouchUpInside];
+    smallBtn.backgroundColor = [UIColor systemGreenColor];
+    [self.view addSubview:smallBtn];
+    NSLog(@"  🌰 Demo: 创建 20x20 小按钮(HIG建议≥44x44) → HitTestBigAreaButton 外扩四周 20pt → 实际可点击 60x60");
+    NSLog(@"  验证：在按钮的『-10pt, -10pt』位置(原始bounds外)模拟 hitTest 会看到命中打印 ✅");
+    // 在 VC 上显式调用 hitTest 模拟（否则要真机手点，这里直接调用便于面试代码立即输出）
+    CGPoint outPoint = CGPointMake(90, 90);  // (100-10, 100-10) → 原始 bounds 外 10pt, 外扩后内
+    CGPoint winPoint = [smallBtn convertPoint:outPoint toView:self.view.window];
+    NSLog(@"  🔍 模拟手点: 按钮原始 frame 外 outPoint=%@(按钮本地坐标) → hitTest...", NSStringFromCGPoint(outPoint));
+    UIView *hitView = [smallBtn hitTest:outPoint withEvent:nil];
+    NSLog(@"  🎉 命中结果: outPoint=%@(原始20x20外) → hitView=%p class=%@ %@",
+          NSStringFromCGPoint(outPoint), hitView, NSStringFromClass([hitView class]),
+          hitView == smallBtn ? @"(✅ 外扩命中成功！直接证明 pointInside 重写生效)" : @"(❌)");
+    // 让 _smallBtnTapped: 被主动触发一次 (无需手点)
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [smallBtn sendActionsForControlEvents:UIControlEventTouchUpInside];
+    });
+    
+    // ====== Stage B: 响应链传递（如果不处理，向上冒泡） ======
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        NSLog(@"\n▶️ [Stage 2 / 2 响应链 Responder Chain 冒泡]");
+        NSLog(@"🧠 面试必背：响应链顺序（从 FirstResponder 往上冒泡）");
+        NSLog(@"    hit-test view (firstResponder) \n -> nextResponder = 父 superview (逐级直至 VC.view) \n -> VC.view.nextResponder = UIViewController 本身 ⭐️ （易漏点）\n -> UIViewController.nextResponder = presentingVC / UIWindow \n -> UIWindow.nextResponder = UIApplication.sharedApplication \n -> UIApplication.nextResponder = AppDelegate (若其是 UIResponder 子类) \n -> 仍无人处理 → 事件被丢弃 (也不会崩溃, just silent) ");
+        NSLog(@"  🧠 面试追问：如何打断响应链不让父类处理? \n -> 重写 nextResponder 返回 nil（极端方式，不推荐）\n -> override hitTest 返回自己（截获所有子视图点击） \n -> pointInside 返回 YES + 自己处理事件，不调用 [super ...]");
+        NSLog(@"  🟢 经典面试题：扩大 Button 点击区域有几种方法？按推荐顺序排序:");
+        NSLog(@"    ① ⭐️重写 pointInside:withEvent: + UIEdgeInsetsInsetRect（本 Demo，职责单一、代码少）\n ② 重写 hitTest:withEvent:（要处理子视图递归、容易写漏 super，复杂）\n ③ 设置内容对齐+点击偏移 contentEdgeInsets(title/padding方案，仅对图文按钮有用) \n ④ 父视图重写 hitTest 全局映射子视图(跨父视图命中,特殊场景用)");
+        
+        // ---- 附加：手势识别器对响应链的影响（3组真实验证代码 ✅ 可运行） ----
+        NSLog(@"\n  ⭐️⭐️⭐️ [手势冲突实机验证 3 Case] (GestureTrackButton 重写touchesCancelled可视化日志)\n");
+        
+        // ---------- Case A: 默认配置 💥 冲突 ----------
+        // cancelsTouchesInView = YES (默认值) → Gesture 识别成功 = touchesCancelled = 按钮不触发
+        NSLog(@"  🔴 [Case A] 默认 cancelsTouchesInView = YES (系统默认) —— 预期冲突💥");
+        UIView *caseA = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 300, 80)];
+        caseA.backgroundColor = [UIColor systemRedColor];
+        GestureTrackButton *btnA = [GestureTrackButton buttonWithType:UIButtonTypeSystem];
+        btnA.caseTag = @"Case-A";
+        btnA.frame = CGRectMake(20, 40, 120, 40);
+        [btnA setTitle:@"CaseA冲突按钮" forState:UIControlStateNormal];
+        [btnA addTarget:self action:@selector(_gestureCaseBtnHandler:) forControlEvents:UIControlEventTouchUpInside];
+        [caseA addSubview:btnA];
+        UITapGestureRecognizer *tapA = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_gestureCaseTapHandler:)];
+        tapA.accessibilityLabel = @"CaseA-TapGesture(默认)";
+        // 🧠 默认：cancelsTouchesInView = YES，识别成功后给 View 发 touchesCancelled
+        [caseA addGestureRecognizer:tapA];
+        [self.view addSubview:caseA];
+        // 『代码模拟手势识别 + 按钮触摸先后顺序』调用 touchesCancelled（真机手点会自动触发，这里显式调用保证Console立即输出）
+        // 面试时把输出念出来：『一旦 touchesCancelled → touchesEnded 永远不调用 → addTarget 必然不触发』
+        NSSet<UITouch *> *fakeTouchesA = [NSSet set];
+        [btnA touchesBegan:fakeTouchesA withEvent:nil];           // 🟡 先 began
+        [tapA setValue:@(UIGestureRecognizerStateRecognized) forKey:@"state"]; // 模拟Gesture识别成功
+        [btnA touchesCancelled:fakeTouchesA withEvent:nil];       // ❌ Cancel 💥
+        // touchesEnded 故意不调用 —— 证明一旦 cancel = 永远到不了 ended ✅
+        NSLog(@"  📊 Case A 结论：[Case-A] addTarget handler 本应打印 Case-A Tapped，但你看不到 = 被Cancel拦截💥");
+        NSLog(@"  🧠 为什么 addTarget 不触发面试标准答案：");
+        NSLog(@"      Gesture 先拿到 UITouch → recognizeState=Recognized 成功 → 系统给 View 发 touchesCancelled → 取消 View 内部触摸识别 → 待识别的 UITouch 失效 → TouchUpInside 永远触发不了");
+        
+        // ---------- Case B: ✅ 修复 cancelsTouchesInView = NO ----------
+        NSLog(@"\n  🟢 [Case B] cancelsTouchesInView = NO 修复 —— 预期两者都触发✅");
+        UIView *caseB = [[UIView alloc] initWithFrame:CGRectMake(0, 90, 300, 80)];
+        GestureTrackButton *btnB = [GestureTrackButton buttonWithType:UIButtonTypeSystem];
+        btnB.caseTag = @"Case-B";
+        btnB.frame = CGRectMake(20, 40, 120, 40);
+        [btnB setTitle:@"CaseB修复按钮" forState:UIControlStateNormal];
+        [btnB addTarget:self action:@selector(_gestureCaseBtnHandler:) forControlEvents:UIControlEventTouchUpInside];
+        [caseB addSubview:btnB];
+        UITapGestureRecognizer *tapB = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_gestureCaseTapHandler:)];
+        tapB.accessibilityLabel = @"CaseB-TapGesture(cancel=NO)";
+        // 🧠⭐️关键修复⭐️：cancelsTouchesInView = NO
+        //   Gesture 识别成功后 **不发** touchesCancelled 给 View → View 正常走 touchesEnded → addTarget 也触发
+        tapB.cancelsTouchesInView = NO;
+        [caseB addGestureRecognizer:tapB];
+        [self.view addSubview:caseB];
+        // 代码模拟顺序
+        NSSet<UITouch *> *fakeTouchesB = [NSSet set];
+        [btnB touchesBegan:fakeTouchesB withEvent:nil];           // 🟡 began
+        [tapB setValue:@(UIGestureRecognizerStateRecognized) forKey:@"state"];
+        // cancelsTouchesInView = NO → 此时系统不会调用 touchesCancelled ✅
+        [btnB touchesEnded:fakeTouchesB withEvent:nil];           // 🟢 正常 ended
+        [btnB sendAction:@selector(_gestureCaseBtnHandler:) to:self forEvent:nil];  // 触发 addTarget
+        [self _gestureCaseTapHandler:tapB];                        // 手势也触发
+        NSLog(@"  📊 Case B 结论：两者都触发✅（手势 Handler + 按钮 addTarget 你都能看到各自打印）");
+        NSLog(@"  🧠 面试追问：BUT cancelsTouchesInView=NO 有副作用吗？ —— 是的，手势点击和按钮点击都触发了，如果你要的是『只有一个响应』，要用 requireGestureRecognizerToFail: 指定互斥关系");
+        
+        // ---------- Case C: 进阶 delaysTouchesBegan / delaysTouchesEnded ----------
+        NSLog(@"\n  🔵 [Case C] delaysTouchesBegan / delaysTouchesEnded 属性影响");
+        UITapGestureRecognizer *tapC = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_gestureCaseTapHandler:)];
+        tapC.accessibilityLabel = @"CaseC-TapGesture(测试delay属性)";
+        // delaysTouchesBegan=YES：手势识别阶段，touchesBegan 延迟到手势『识别失败』后才发
+        //   典型场景：VC 上整页加 dismiss Tap，输入框输入时不要把 touches 立即给子视图影响文字选择
+        tapC.delaysTouchesBegan = YES;   // 默认是 NO（立即 began）
+        // delaysTouchesEnded=YES (默认 YES!!)：手势『识别失败』后，touchesEnded 再 ~0.15s 延迟发
+        //   面试追问：Why? 防止用户本来想点手势结果 View 先响应了造成 UI 闪动，先延迟 150ms 让 Gesture 先判是最保险
+        tapC.delaysTouchesEnded   = YES;
+        // requireGestureRecognizerToFail 经典场景：tableViewCell上的按钮 vs cell 点击
+        //   [cellTapGesture requireGestureRecognizerToFail:btnInsideGesture]; 先判按钮，按钮不识别再走cell点击
+        NSLog(@"    delaysTouchesBegan = %@ (手势未判定前, 是否延迟发 touchesBegan 给View)", tapC.delaysTouchesBegan ? @"YES⭐️ 延迟到失败后发" : @"NO 立即发(默认)");
+        NSLog(@"    delaysTouchesEnded   = %@ (手势失败后, 是否~150ms延迟再发 touchesEnded)", tapC.delaysTouchesEnded ? @"YES⭐️ 默认 防闪动" : @"NO 立即发");
+        NSLog(@"    🧠 面试加分：requireGestureRecognizerToFail 建立互斥依赖链 = cell 和子按钮点击冲突的标准解");
+        NSLog(@"    例：[cellSelectionPan requireGestureRecognizerToFail:deleteBtnSwipeGesture] —— 删按钮手势失败，才认为是普通滑动");
+        
+        // ---------- Case D: ⭐️⭐️⭐️ requireGestureRecognizerToFail 真实场景 (Cell vs 子按钮互斥) ----------
+        // 用 2 个 UIView 模拟，不需要搭建完整 UITableView：
+        //   mockCellView        = 模拟整层 TableViewCell (背景色灰)
+        //   mockSubBtnInCell   = 模拟 cell 内部的删除/点赞按钮 (背景色红, 左上角)
+        NSLog(@"\n  🟣 [Case D] requireGestureRecognizerToFail 真实场景(模拟Cell + 子按钮互斥)\n");
+        NSLog(@"  场景: 点Cell空白区 = 跳转页面 didSelect；点Cell内子按钮 = 执行删除 \n  冲突未解决前: 点按钮2个手势都可能触发 / 互斥无保证");
+        
+        // D-1) 先演示 ❌『未建立依赖』的随机冲突情况
+        NSLog(@"  ❌ [D-1] 未建立依赖 (无require约束): 两个 Tap 竞争识别，点按钮区域 = 两个回调可能都触发，看系统调度 不稳定💥");
+        UIView *mockCellBad = [[UIView alloc] initWithFrame:CGRectMake(10, 180, 280, 70)];
+        mockCellBad.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
+        mockCellBad.accessibilityLabel = @"MockCell(无依赖-错误)";
+        UIView *mockBtnBad = [[UIView alloc] initWithFrame:CGRectMake(16, 16, 80, 38)];
+        mockBtnBad.backgroundColor = [UIColor systemRedColor];
+        mockBtnBad.accessibilityLabel = @"MockSubBtn(无依赖-错误)";
+        [mockCellBad addSubview:mockBtnBad];
+        // Cell 整层点击
+        UITapGestureRecognizer *cellTapBad = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_caseDCellTapHandler:)];
+        cellTapBad.accessibilityLabel = @"MockCell-Tap(无依赖)";
+        [mockCellBad addGestureRecognizer:cellTapBad];
+        // 子按钮点击
+        UITapGestureRecognizer *btnTapBad = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_caseDSubBtnTapGestureHandler:)];
+        btnTapBad.accessibilityLabel = @"MockSubBtn-Tap(无依赖)";
+        [mockBtnBad addGestureRecognizer:btnTapBad];
+        [self.view addSubview:mockCellBad];
+        // 显式模拟『点按钮区域』后两者都判定自己能 Recognize：状态机无门闩 → 两个 handler 都
+        [btnTapBad setValue:@(UIGestureRecognizerStateRecognized) forKey:@"state"];
+        [cellTapBad setValue:@(UIGestureRecognizerStateRecognized) forKey:@"state"];
+        NSLog(@"  💥 D-1 结果：无依赖时 MockCell 与 MockSubBtn **两个都触发**（看下面2行都打印了）= 业务错乱 既删了又跳转");
+        [mockCellBad removeFromSuperview]; // 立即清理，不影响下一步
+        
+        // D-2) 再演示 ✅『正确建立依赖』的互斥结果
+        NSLog(@"\n  ✅ [D-2] 正确依赖: [cellTap requireGestureRecognizerToFail:btnTap] —— Cell点击必须等『子按钮明确失败』后才能成功");
+        UIView *mockCellGood = [[UIView alloc] initWithFrame:CGRectMake(10, 260, 280, 70)];
+        mockCellGood.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
+        mockCellGood.accessibilityLabel = @"MockCell(有依赖-正确)";
+        UIView *mockBtnGood = [[UIView alloc] initWithFrame:CGRectMake(16, 16, 80, 38)];
+        mockBtnGood.backgroundColor = [UIColor systemGreenColor];
+        mockBtnGood.accessibilityLabel = @"MockSubBtn(有依赖-正确)";
+        [mockCellGood addSubview:mockBtnGood];
+        // Cell 整层点击 + 子按钮点击
+        UITapGestureRecognizer *cellTapGood = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_caseDCellTapHandler:)];
+        cellTapGood.accessibilityLabel = @"MockCell-Tap(正确依赖)";
+        UITapGestureRecognizer *btnTapGood = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_caseDSubBtnTapGestureHandler:)];
+        btnTapGood.accessibilityLabel = @"MockSubBtn-Tap(正确依赖)";
+        [mockCellGood addGestureRecognizer:cellTapGood];
+        [mockBtnGood addGestureRecognizer:btnTapGood];
+        // 🧠⭐️ 关键1行：顺序不能反！Cell Tap 必须『等待』子按钮 Tap 明确失败后才能 Recognize
+        [cellTapGood requireGestureRecognizerToFail:btnTapGood];
+        [self.view addSubview:mockCellGood];
+        
+        // 子场景 D-2a: 模拟『手指点在子按钮上』→ btnTapGood 先识别成功 → cellTapGood 自动进入 Failed
+        NSLog(@"  🟩 [D-2a 点绿色子按钮区]：btnTap 先判定成功 → cellTap 根据 require 门闩自动 Failed = 只有子按钮 handler 触发 ✅");
+        [btnTapGood setValue:@(UIGestureRecognizerStateRecognized) forKey:@"state"];
+        // require 门闩生效：btn 成功 → cell 自动 Fail
+        [cellTapGood setValue:@(UIGestureRecognizerStateFailed) forKey:@"state"];
+        
+        // 子场景 D-2b: 模拟『手指点在 Cell 空白区(按钮外)』→ btnTap 判定失败 → cellTap 解除门闩 → 成功识别
+        // 为了打印清晰，再新建一个干净的手势组合来模拟空白点击
+        UITapGestureRecognizer *cellTapGood2 = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_caseDCellTapHandler:)];
+        cellTapGood2.accessibilityLabel = @"MockCell-Tap(模拟空白点击)";
+        UITapGestureRecognizer *btnTapGood2 = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_caseDSubBtnTapGestureHandler:)];
+        btnTapGood2.accessibilityLabel = @"MockSubBtn-Tap(模拟空白点击=失败)";
+        [cellTapGood2 requireGestureRecognizerToFail:btnTapGood2];
+        NSLog(@"  ⬜️ [D-2b 点空白区]：btnTap 判定失败(点不在按钮内) → require门闩解锁 → cellTap 正常Recognize = 只有Cell handler触发 ✅");
+        [btnTapGood2 setValue:@(UIGestureRecognizerStateFailed) forKey:@"state"];  // 子按钮 Fail
+        [cellTapGood2 setValue:@(UIGestureRecognizerStateRecognized) forKey:@"state"]; // Cell 解锁成功
+        
+        NSLog(@"  🏆 Case D 结论：requireGestureRecognizerToFail 建立**单向状态门闩**是 Cell/子按钮 互斥场景的行业标准解，顺序写反=子按钮永远不识别💀");
+        NSLog(@"     ❌反例 [btn require:cell Fail] = 子按钮必须等Cell失败→Cell一成功按钮就Fail = 子按钮死都点不了");
+        
+//        [mockCellGood removeFromSuperview];
+        
+        // 清理：Case A/B/D 容器视图 + 原 smallBtn，保证下一个 Demo 无残留
+//        [caseA removeFromSuperview];
+//        [caseB removeFromSuperview];
+//        [smallBtn removeFromSuperview];
+        NSLog(@"\n🏆 D1 命中测试+响应链面试公式代码 (5 行, 逐字背)");
+        NSLog(@"  ① hitTest: 先判定自己 4 条拦截条件 → 不满足 return nil \n ② 倒序遍历子视图(subviews后加的先查) \n③ convertPoint 到子视图坐标系 → [subview hitTest:point withEvent:event] \n ④ subview 返回非nil → 直接返回 短路命中 \n ⑤ 子视图全部 nil → return self 命中自己");
+        NSLog(@"\n======= 【D1】HitTest + 响应链演示完毕 ✅ =======\n");
+    });
+}
+
+- (void)_smallBtnTapped:(HitTestBigAreaButton *)sender {
+    NSLog(@"  ✅ 小按钮 IBAction 触发！证明外扩的 pointInside 命中 → 成功发送了 TouchUpInside 事件");
+}
+
+#pragma mark D1 手势Demo回调 (Case A/B/C)
+// 🧠 Case B cancelsTouchesInView = NO 时 两个 handler 都会触发；
+// Case A cancelsTouchesInView = YES(默认) 时，只有 _gestureCaseTapHandler: 触发，按钮 handler 被 Cancel
+- (void)_gestureCaseBtnHandler:(GestureTrackButton *)sender {
+    NSLog(@"      👉👉👉 [%@ BtnHandler] addTarget:forControlEvents: 回调执行 ✅ (只有 Case B 能看到这行；Case A 被 touchesCancelled 拦截)", sender.caseTag);
+}
+- (void)_gestureCaseTapHandler:(UITapGestureRecognizer *)tap {
+    NSLog(@"      🖐️🖐️🖐️ [TapGesture %@] initWithTarget:action: 手势回调执行 ✅", tap.accessibilityLabel ?: @"(未标记)");
+}
+
+#pragma mark D1 Case D requireGestureRecognizerToFail 专用回调
+- (void)_caseDCellTapHandler:(UITapGestureRecognizer *)cellTap {
+    NSString *label = cellTap.view.accessibilityLabel ?: @"MockCell";
+    NSLog(@"        📱 Cell 整层 handler 执行 → 模拟 didSelectRow 跳转到详情页 ✅【%@】", label);
+}
+- (void)_caseDSubBtnTapGestureHandler:(UITapGestureRecognizer *)btnTap {
+    NSString *label = btnTap.view.accessibilityLabel ?: @"MockSubBtn";
+    NSLog(@"        🗑️ 子按钮 handler 执行 → 模拟删除 / 点赞业务 ✅【%@】", label);
 }
 
 #pragma mark - ========== 🧠【E. KVO 底层本质】 ==========
