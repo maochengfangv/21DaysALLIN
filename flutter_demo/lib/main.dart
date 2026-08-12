@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'pages/animation_demo_page.dart';
 import 'pages/baseline_list_page.dart';
 import 'pages/optimized_list_page.dart';
 
@@ -29,6 +30,7 @@ class DemoApp extends StatelessWidget {
           routes: {
             BaselineListPage.routeName: (_) => const BaselineListPage(),
             OptimizedListPage.routeName: (_) => const OptimizedListPage(),
+            AnimationDemoPage.routeName: (_) => const AnimationDemoPage(),
           },
         );
       },
@@ -105,6 +107,12 @@ class HomePage extends StatelessWidget {
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 12),
+            const SizedBox(height: 16),
+            FilledButton.tonal(
+              onPressed: () => _open(context, AnimationDemoPage.routeName),
+              child: const Text('🎬 Flutter 动画体系 Demo（面试复习）'),
+            ),
+            const SizedBox(height: 16),
             const Text(
               '建议在 Profile 模式 + DevTools Performance 面板下对比。\n可先打开 Overlay 开关进行肉眼观察。',
               textAlign: TextAlign.center,

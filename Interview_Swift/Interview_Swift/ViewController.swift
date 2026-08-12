@@ -292,10 +292,9 @@ class ViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view.
         view.backgroundColor = .systemBackground
         setupDemoEntryView()
-        print("\n--- 开始测试 ---")
+        print("\n🟣 ================ Swift 面试技术要点 Demo 启动 ================")
 //        @Clamper0To100 var score = 120
 //        print(score)
 //        score = -10
@@ -323,19 +322,119 @@ class ViewController: UIViewController {
     }
 
     private func setupDemoEntryView() {
-        view.addSubview(demoStackView)
+        let scrollView = UIScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+        scrollView.addSubview(demoStackView)
+        
         demoStackView.addArrangedSubview(titleLabel)
         demoStackView.addArrangedSubview(subtitleLabel)
-        demoStackView.addArrangedSubview(makeDemoButton(title: "打开活动页", action: #selector(didTapOpenCampaignButton)))
-        demoStackView.addArrangedSubview(makeDemoButton(title: "测试 JSBridge", action: #selector(didTapOpenJSBridgeButton)))
-        demoStackView.addArrangedSubview(makeDemoButton(title: "测试 _blank 新开页", action: #selector(didTapOpenBlankPageButton)))
-        demoStackView.addArrangedSubview(makeDemoButton(title: "打开异常页", action: #selector(didTapOpenErrorPageButton)))
+        
+        // WKWebView 组
+        demoStackView.addArrangedSubview(makeSectionLabel("📦 WKWebView 系列"))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "打开活动页", action: #selector(didTapOpenCampaignButton), tint: .systemBlue))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "测试 JSBridge", action: #selector(didTapOpenJSBridgeButton), tint: .systemBlue))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "测试 _blank 新开页", action: #selector(didTapOpenBlankPageButton), tint: .systemBlue))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "打开异常页", action: #selector(didTapOpenErrorPageButton), tint: .systemBlue))
+        
+        // Swift 基础组
+        demoStackView.addArrangedSubview(makeSectionLabel("🔷 Swift 核心类型系统"))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo1: Struct/Class/COW", action: #selector(demoStructClass), tint: .systemOrange))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo2: Optional 解包", action: #selector(demoOptional), tint: .systemOrange))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo3: Enum 关联值/递归", action: #selector(demoEnum), tint: .systemOrange))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo4: 闭包循环引用", action: #selector(demoClosure), tint: .systemOrange))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo5: 错误处理 throw/Result", action: #selector(demoError), tint: .systemOrange))
+        
+        // Swift 进阶组
+        demoStackView.addArrangedSubview(makeSectionLabel("💠 Swift 进阶特性"))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo6: POP 面向协议", action: #selector(demoPOP), tint: .systemPurple))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo10: some/any/泛型", action: #selector(demoGenerics), tint: .systemPurple))
+        
+        // 框架组
+        demoStackView.addArrangedSubview(makeSectionLabel("🚀 苹果框架 (JD 要求)"))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo7: Combine 响应式", action: #selector(demoCombine), tint: .systemPink))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo8: SwiftUI 声明式", action: #selector(demoSwiftUI), tint: .systemPink))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "Demo9: CoreData 持久化", action: #selector(demoCoreData), tint: .systemPink))
+        
+        // 一键运行全部
+        demoStackView.addArrangedSubview(makeSectionLabel("⚡ 一键验收"))
+        demoStackView.addArrangedSubview(makeDemoButton(title: "🚀 运行全部 Swift Demo (控制台查看)", action: #selector(runAllSwiftDemos), tint: .systemGreen, isBold: true))
 
         NSLayoutConstraint.activate([
-            demoStackView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            demoStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            demoStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24)
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            
+            demoStackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 16),
+            demoStackView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: 24),
+            demoStackView.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -24),
+            demoStackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -16)
         ])
+    }
+    
+    private func makeSectionLabel(_ text: String) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.font = .boldSystemFont(ofSize: 15)
+        label.textColor = .secondaryLabel
+        label.textAlignment = .left
+        return label
+    }
+    
+    private func makeDemoButton(title: String, action: Selector, tint: UIColor = .systemBlue, isBold: Bool = false) -> UIButton {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.configuration = .filled()
+        button.configuration?.title = title
+        button.configuration?.cornerStyle = .large
+        button.configuration?.baseBackgroundColor = tint
+        button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { container in
+            var c = container
+            c.font = isBold ? .boldSystemFont(ofSize: 16) : .systemFont(ofSize: 15)
+            return c
+        }
+        button.heightAnchor.constraint(equalToConstant: isBold ? 56 : 50).isActive = true
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+    
+    // MARK: - Swift 技术要点 Demo 入口
+    @objc private func demoStructClass() { StructClassDemo.run() }
+    @objc private func demoOptional()    { OptionalDemo.run() }
+    @objc private func demoEnum()        { EnumDemo.run() }
+    @objc private func demoClosure()     { ClosureDemo.run() }
+    @objc private func demoError()       { ErrorDemo.run() }
+    @objc private func demoPOP()         { POPDemo.run() }
+    @objc private func demoGenerics()    { GenericsDemo.run() }
+    @objc private func demoCombine()     { CombineDemo.run() }
+    @objc private func demoCoreData()    { CoreDataDemo.run() }
+    
+    @objc private func demoSwiftUI() {
+        SwiftUIDemo.run()
+        let host = SwiftUIDemo.makeHostingController()
+        if let navigationController {
+            navigationController.pushViewController(host, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: host)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
+        }
+    }
+    
+    @objc private func runAllSwiftDemos() {
+        print("\n🚀 ============= 开始一键运行全部 Swift 技术要点 Demo =============\n")
+        StructClassDemo.run()
+        OptionalDemo.run()
+        EnumDemo.run()
+        ClosureDemo.run()
+        ErrorDemo.run()
+        POPDemo.run()
+        GenericsDemo.run()
+        CombineDemo.run()
+        CoreDataDemo.run()
+        SwiftUIDemo.run()
+        print("\n🏁 ============= 全部 Swift 技术要点 Demo 执行完毕 =============\n")
     }
 
     @objc
@@ -438,16 +537,7 @@ class ViewController: UIViewController {
         )
     }
 
-    private func makeDemoButton(title: String, action: Selector) -> UIButton {
-        let button = UIButton(type: .system)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.configuration = .filled()
-        button.configuration?.title = title
-        button.configuration?.cornerStyle = .large
-        button.heightAnchor.constraint(equalToConstant: 52).isActive = true
-        button.addTarget(self, action: action, for: .touchUpInside)
-        return button
-    }
+
 
     private func openTestWebView() {
         openWebView(
@@ -662,7 +752,7 @@ class ViewController: UIViewController {
     
     private  func work(_ id: Int) async -> Int {
         
-        try? await Task.sleep(nanoseconds: UInt64() * 100_000_000)
+        try? await Task.sleep(nanoseconds: UInt64(id) * 100_000_000)
         print("任务\(id) 完成")
         return id * 10
     }
