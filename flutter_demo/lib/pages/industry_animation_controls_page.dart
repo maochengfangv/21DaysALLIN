@@ -1,5 +1,25 @@
 import 'package:flutter/material.dart';
 
+class _AnimationTokens {
+  const _AnimationTokens._();
+
+  static const Duration press = Duration(milliseconds: 120);
+  static const Duration quick = Duration(milliseconds: 160);
+  static const Duration standard = Duration(milliseconds: 260);
+  static const Duration emphasized = Duration(milliseconds: 280);
+  static const Duration fade = Duration(milliseconds: 200);
+  static const Duration progress = Duration(milliseconds: 900);
+
+  static const Duration delayNone = Duration.zero;
+  static const Duration delayShort = Duration(milliseconds: 80);
+  static const Duration delayMedium = Duration(milliseconds: 160);
+
+  static const Curve enter = Curves.easeOutCubic;
+  static const Curve exit = Curves.easeInCubic;
+  static const Curve standardCurve = Curves.easeInOutCubic;
+  static const Curve pressCurve = Curves.easeOut;
+}
+
 class IndustryAnimationControlsPage extends StatelessWidget {
   static const routeName = '/industry-animation-controls';
 
@@ -119,9 +139,9 @@ class _IndustryAnimationControlsViewState
               ),
               const SizedBox(height: 16),
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 260),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
+                duration: _AnimationTokens.standard,
+                switchInCurve: _AnimationTokens.enter,
+                switchOutCurve: _AnimationTokens.exit,
                 transitionBuilder: (child, animation) {
                   return FadeTransition(
                     opacity: animation,
@@ -154,11 +174,11 @@ class _IndustryAnimationControlsViewState
               ),
               const SizedBox(height: 12),
               AnimatedSlide(
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutCubic,
+                duration: _AnimationTokens.emphasized,
+                curve: _AnimationTokens.enter,
                 offset: _noticeVisible ? Offset.zero : const Offset(0, -0.25),
                 child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
+                  duration: _AnimationTokens.fade,
                   opacity: _noticeVisible ? 1 : 0,
                   child: IgnorePointer(
                     ignoring: !_noticeVisible,
@@ -205,8 +225,8 @@ class _IndustryAnimationControlsViewState
               ),
               const SizedBox(height: 12),
               AnimatedSize(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeInOutCubic,
+                duration: _AnimationTokens.standard,
+                curve: _AnimationTokens.standardCurve,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: _expanded ? 240 : 72,
@@ -380,12 +400,12 @@ class _PressFeedbackCardState extends State<_PressFeedbackCard> {
       onTapUp: (_) => _setPressed(false),
       onTap: widget.onTap,
       child: AnimatedScale(
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
+        duration: _AnimationTokens.press,
+        curve: _AnimationTokens.pressCurve,
         scale: _pressed ? 0.97 : 1,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
+          duration: _AnimationTokens.quick,
+          curve: _AnimationTokens.enter,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
@@ -508,8 +528,8 @@ class _ContentPanel extends StatelessWidget {
           const Spacer(),
           TweenAnimationBuilder<double>(
             tween: Tween<double>(begin: 0, end: 0.9),
-            duration: const Duration(milliseconds: 900),
-            curve: Curves.easeOutCubic,
+            duration: _AnimationTokens.progress,
+            curve: _AnimationTokens.enter,
             builder: (context, value, _) {
               return LinearProgressIndicator(value: value);
             },
