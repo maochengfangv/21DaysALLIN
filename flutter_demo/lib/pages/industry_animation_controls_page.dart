@@ -765,29 +765,31 @@ class _HeroDetailPage extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(28),
               ),
-              child: const Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.auto_awesome, color: Colors.white, size: 44),
-                  SizedBox(height: 24),
-                  Text(
-                    'Hero 动画详情页',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
+              child: const SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.auto_awesome, color: Colors.white, size: 44),
+                    SizedBox(height: 24),
+                    Text(
+                      'Hero 动画详情页',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 12),
-                  Text(
-                    '这是大厂内容流和商城最常见的共享元素转场模式：卡片进详情，视觉连续，用户不会“丢位置”。',
-                    style: TextStyle(
-                      color: Colors.white,
-                      height: 1.5,
+                    SizedBox(height: 12),
+                    Text(
+                      '这是大厂内容流和商城最常见的共享元素转场模式：卡片进详情，视觉连续，用户不会“丢位置”。',
+                      style: TextStyle(
+                        color: Colors.white,
+                        height: 1.5,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
