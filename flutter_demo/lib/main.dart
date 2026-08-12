@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'pages/animation_demo_page.dart';
 import 'pages/baseline_list_page.dart';
+import 'pages/industry_animation_controls_page.dart';
 import 'pages/optimized_list_page.dart';
+import 'pages/thread_demo_page.dart';
 
 final ValueNotifier<bool> performanceOverlayEnabled = ValueNotifier<bool>(false);
 
@@ -31,6 +33,9 @@ class DemoApp extends StatelessWidget {
             BaselineListPage.routeName: (_) => const BaselineListPage(),
             OptimizedListPage.routeName: (_) => const OptimizedListPage(),
             AnimationDemoPage.routeName: (_) => const AnimationDemoPage(),
+            ThreadDemoPage.routeName: (_) => const ThreadDemoPage(),
+            IndustryAnimationControlsPage.routeName: (_) =>
+                const IndustryAnimationControlsPage(),
           },
         );
       },
@@ -51,7 +56,7 @@ class HomePage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Long List Performance Demo'),
+        title: const Text('Flutter Demo Playground'),
         actions: [
           ValueListenableBuilder<bool>(
             valueListenable: performanceOverlayEnabled,
@@ -111,6 +116,17 @@ class HomePage extends StatelessWidget {
             FilledButton.tonal(
               onPressed: () => _open(context, AnimationDemoPage.routeName),
               child: const Text('🎬 Flutter 动画体系 Demo（面试复习）'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: () =>
+                  _open(context, IndustryAnimationControlsPage.routeName),
+              child: const Text('✨ 大厂 Flutter 动画控件 Demo'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: () => _open(context, ThreadDemoPage.routeName),
+              child: const Text('🧵 Flutter 线程 / Isolate Demo'),
             ),
             const SizedBox(height: 16),
             const Text(
