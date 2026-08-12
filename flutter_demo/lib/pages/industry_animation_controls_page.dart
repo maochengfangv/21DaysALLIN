@@ -20,6 +20,28 @@ class _AnimationTokens {
   static const Curve pressCurve = Curves.easeOut;
 }
 
+class AppMotionScope extends InheritedWidget {
+  final bool reduceMotion;
+  final bool criticalPath;
+
+  const AppMotionScope({
+    super.key,
+    required this.reduceMotion,
+    required this.criticalPath,
+    required super.child,
+  });
+
+  static AppMotionScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<AppMotionScope>();
+  }
+
+  @override
+  bool updateShouldNotify(AppMotionScope oldWidget) {
+    return reduceMotion != oldWidget.reduceMotion ||
+        criticalPath != oldWidget.criticalPath;
+  }
+}
+
 class IndustryAnimationControlsPage extends StatelessWidget {
   static const routeName = '/industry-animation-controls';
 
@@ -49,6 +71,8 @@ class _IndustryAnimationControlsViewState
   _DemoViewState _state = _DemoViewState.content;
   bool _noticeVisible = true;
   bool _expanded = false;
+  bool _manualReducedMotion = false;
+  bool _criticalPath = false;
 
   void _showActionPanel() {
     showModalBottomSheet<void>(
@@ -79,8 +103,15 @@ class _IndustryAnimationControlsViewState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final systemReduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        systemReduceMotion || _manualReducedMotion || _criticalPath;
 
-    return ListView(
+    return AppMotionScope(
+      reduceMotion: reduceMotion,
+      criticalPath: _criticalPath,
+      child: ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _SectionCard(
@@ -96,6 +127,42 @@ class _IndustryAnimationControlsViewState
               _TagChip(label: '通知提示'),
               _TagChip(label: '展开收起'),
               _TagChip(label: 'Hero 转场'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: '降级开关',
+          subtitle: '动画不只是能做，还得能关、能减弱、能在关键链路里让位。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilterChip(
+                    label: const Text('手动降级'),
+                    selected: _manualReducedMotion,
+                    onSelected: (v) => setState(() => _manualReducedMotion = v),
+                  ),
+                  FilterChip(
+                    label: const Text('首屏路径'),
+                    selected: _criticalPath,
+                    onSelected: (v) => setState(() => _criticalPath = v),
+                  ),
+                  FilterChip(
+                    label: Text(systemReduceMotion ? '系统减少动态效果: 开' : '系统减少动态效果: 关'),
+                    selected: systemReduceMotion,
+                    onSelected: null,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                reduceMotion ? '当前策略：关闭/减弱动画，关键链路让位。' : '当前策略：完整动画。',
+                style: theme.textTheme.bodySmall,
+              ),
             ],
           ),
         ),
@@ -261,6 +328,7 @@ class _IndustryAnimationControlsViewState
           ),
         ),
       ],
+    ),
     );
   }
 }
@@ -355,17 +423,18 @@ class _AppPressableState extends State<AppPressable> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final reduceMotion = AppMotionScope.maybeOf(context)?.reduceMotion ?? false;
     return GestureDetector(
       onTapDown: (_) => _setPressed(true),
       onTapCancel: () => _setPressed(false),
       onTapUp: (_) => _setPressed(false),
       onTap: widget.onTap,
       child: AnimatedScale(
-        duration: _AnimationTokens.press,
+        duration: reduceMotion ? Duration.zero : _AnimationTokens.press,
         curve: _AnimationTokens.pressCurve,
-        scale: _pressed ? 0.97 : 1,
+        scale: reduceMotion ? 1 : (_pressed ? 0.97 : 1),
         child: AnimatedContainer(
-          duration: _AnimationTokens.quick,
+          duration: reduceMotion ? Duration.zero : _AnimationTokens.quick,
           curve: _AnimationTokens.enter,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -387,6 +456,8 @@ class AppStateSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = AppMotionScope.maybeOf(context)?.reduceMotion ?? false;
+    if (reduceMotion) return child;
     return AnimatedSwitcher(
       duration: _AnimationTokens.standard,
       switchInCurve: _AnimationTokens.enter,
@@ -410,6 +481,16 @@ class AppNoticeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final reduceMotion = AppMotionScope.maybeOf(context)?.reduceMotion ?? false;
+    if (reduceMotion) {
+      return visible
+          ? Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: theme.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(16)),
+              child: Row(children: [Icon(icon, color: theme.colorScheme.onPrimaryContainer), const SizedBox(width: 10), Expanded(child: Text(message, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onPrimaryContainer)))]),
+            )
+          : const SizedBox.shrink();
+    }
     return AnimatedSlide(
       duration: _AnimationTokens.emphasized,
       curve: _AnimationTokens.enter,
@@ -440,6 +521,13 @@ class AppExpandableSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = AppMotionScope.maybeOf(context)?.reduceMotion ?? false;
+    if (reduceMotion) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: expanded ? expandedHeight : collapsedHeight),
+        child: child,
+      );
+    }
     return AnimatedSize(
       duration: _AnimationTokens.standard,
       curve: _AnimationTokens.standardCurve,
@@ -460,20 +548,19 @@ class AppHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = AppMotionScope.maybeOf(context)?.reduceMotion ?? false;
+    final card = Material(
+      color: Colors.transparent,
+      child: Container(
+        height: 160,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF9333EA)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20)),
+        child: child,
+      ),
+    );
     return GestureDetector(
       onTap: onTap,
-      child: Hero(
-        tag: tag,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            height: 160,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF9333EA)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20)),
-            child: child,
-          ),
-        ),
-      ),
+      child: reduceMotion ? card : Hero(tag: tag, child: card),
     );
   }
 }
@@ -558,12 +645,18 @@ class _ContentPanel extends StatelessWidget {
           const SizedBox(height: 8),
           const Text('这里通常对应首页 Feed、商品列表、搜索结果页的正常内容态。'),
           const Spacer(),
-          TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0, end: 0.9),
-            duration: _AnimationTokens.progress,
-            curve: _AnimationTokens.enter,
-            builder: (context, value, _) {
-              return LinearProgressIndicator(value: value);
+          Builder(
+            builder: (context) {
+              final reduceMotion = AppMotionScope.maybeOf(context)?.reduceMotion ?? false;
+              if (reduceMotion) {
+                return const LinearProgressIndicator(value: 0.9);
+              }
+              return TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: 0.9),
+                duration: _AnimationTokens.progress,
+                curve: _AnimationTokens.enter,
+                builder: (context, value, _) => LinearProgressIndicator(value: value),
+              );
             },
           ),
         ],
