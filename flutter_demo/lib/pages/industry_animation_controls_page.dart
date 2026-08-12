@@ -56,7 +56,14 @@ class _IndustryAnimationControlsViewState
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) {
-        return const _ActionPanel();
+        return const AppActionSheet(
+          children: [
+            _ActionTile(icon: Icons.bookmark_border, title: '收藏'),
+            _ActionTile(icon: Icons.share_outlined, title: '分享'),
+            _ActionTile(icon: Icons.link_outlined, title: '复制链接'),
+            _ActionTile(icon: Icons.report_gmailerrorred_outlined, title: '举报'),
+          ],
+        );
       },
     );
   }
@@ -96,12 +103,34 @@ class _IndustryAnimationControlsViewState
         _SectionCard(
           title: '1. 点击反馈控件',
           subtitle: '大厂高频做法：按下轻缩放，抬起恢复，同时保留轻量阴影与圆角。',
-          child: _PressFeedbackCard(
+          child: AppPressable(
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('点击反馈已触发')),
               );
             },
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.touch_app_outlined,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text('按下缩放 + 抬起恢复，是最常见也最实用的交互反馈动画。'),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -138,20 +167,7 @@ class _IndustryAnimationControlsViewState
                 ],
               ),
               const SizedBox(height: 16),
-              AnimatedSwitcher(
-                duration: _AnimationTokens.standard,
-                switchInCurve: _AnimationTokens.enter,
-                switchOutCurve: _AnimationTokens.exit,
-                transitionBuilder: (child, animation) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SizeTransition(
-                      sizeFactor: animation,
-                      axisAlignment: -1,
-                      child: child,
-                    ),
-                  );
-                },
+              AppStateSwitcher(
                 child: _StateView(
                   key: ValueKey<_DemoViewState>(_state),
                   state: _state,
@@ -173,41 +189,10 @@ class _IndustryAnimationControlsViewState
                 child: Text(_noticeVisible ? '隐藏通知' : '显示通知'),
               ),
               const SizedBox(height: 12),
-              AnimatedSlide(
-                duration: _AnimationTokens.emphasized,
-                curve: _AnimationTokens.enter,
-                offset: _noticeVisible ? Offset.zero : const Offset(0, -0.25),
-                child: AnimatedOpacity(
-                  duration: _AnimationTokens.fade,
-                  opacity: _noticeVisible ? 1 : 0,
-                  child: IgnorePointer(
-                    ignoring: !_noticeVisible,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.local_fire_department_outlined,
-                            color: theme.colorScheme.onPrimaryContainer,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              '限时活动开始，首页会场已更新，点击查看最新推荐内容。',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+              AppNoticeBanner(
+                visible: _noticeVisible,
+                icon: Icons.local_fire_department_outlined,
+                message: '限时活动开始，首页会场已更新，点击查看最新推荐内容。',
               ),
             ],
           ),
@@ -224,21 +209,17 @@ class _IndustryAnimationControlsViewState
                 child: Text(_expanded ? '收起内容' : '展开内容'),
               ),
               const SizedBox(height: 12),
-              AnimatedSize(
-                duration: _AnimationTokens.standard,
-                curve: _AnimationTokens.standardCurve,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: _expanded ? 240 : 72,
-                  ),
-                  child: Text(
-                    'Flutter 在业务侧最常见的动画，不一定是复杂特效，而是让状态切换更自然、让操作反馈更明确。'
-                    '真正的大厂动画体系，重点通常是统一规范、减少突兀感、控制重绘范围，并对低端机提供合理降级。'
-                    '所以在工程实践里，动画从来不是单独存在的，它一定和组件封装、性能治理、埋点观测放在一起看。',
-                    style: theme.textTheme.bodyMedium,
-                    overflow:
-                        _expanded ? TextOverflow.visible : TextOverflow.fade,
-                  ),
+              AppExpandableSection(
+                expanded: _expanded,
+                collapsedHeight: 72,
+                expandedHeight: 240,
+                child: Text(
+                  'Flutter 在业务侧最常见的动画，不一定是复杂特效，而是让状态切换更自然、让操作反馈更明确。'
+                  '真正的大厂动画体系，重点通常是统一规范、减少突兀感、控制重绘范围，并对低端机提供合理降级。'
+                  '所以在工程实践里，动画从来不是单独存在的，它一定和组件封装、性能治理、埋点观测放在一起看。',
+                  style: theme.textTheme.bodyMedium,
+                  overflow:
+                      _expanded ? TextOverflow.visible : TextOverflow.fade,
                 ),
               ),
             ],
@@ -257,45 +238,25 @@ class _IndustryAnimationControlsViewState
         _SectionCard(
           title: '6. Hero 共享元素',
           subtitle: '内容卡片进入详情页，是大厂内容流、商城、社区里非常高频的过渡模式。',
-          child: GestureDetector(
+          child: AppHeroCard(
+            tag: 'industry_hero_card',
             onTap: _openHeroDetail,
-            child: Hero(
-              tag: 'industry_hero_card',
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  height: 160,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF4F46E5), Color(0xFF9333EA)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.auto_awesome, color: Colors.white, size: 34),
-                      Spacer(),
-                      Text(
-                        '共享元素转场',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        '点击进入详情页',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ],
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.auto_awesome, color: Colors.white, size: 34),
+                Spacer(),
+                Text(
+                  '共享元素转场',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
+                SizedBox(height: 6),
+                Text('点击进入详情页', style: TextStyle(color: Colors.white70)),
+              ],
             ),
           ),
         ),
@@ -373,16 +334,17 @@ class _TagChip extends StatelessWidget {
   }
 }
 
-class _PressFeedbackCard extends StatefulWidget {
-  final VoidCallback onTap;
+class AppPressable extends StatefulWidget {
+  final VoidCallback? onTap;
+  final Widget child;
 
-  const _PressFeedbackCard({required this.onTap});
+  const AppPressable({super.key, this.onTap, required this.child});
 
   @override
-  State<_PressFeedbackCard> createState() => _PressFeedbackCardState();
+  State<AppPressable> createState() => _AppPressableState();
 }
 
-class _PressFeedbackCardState extends State<_PressFeedbackCard> {
+class _AppPressableState extends State<AppPressable> {
   bool _pressed = false;
 
   void _setPressed(bool value) {
@@ -393,7 +355,6 @@ class _PressFeedbackCardState extends State<_PressFeedbackCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return GestureDetector(
       onTapDown: (_) => _setPressed(true),
       onTapCancel: () => _setPressed(false),
@@ -410,35 +371,106 @@ class _PressFeedbackCardState extends State<_PressFeedbackCard> {
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: _pressed ? 0.06 : 0.12),
-                blurRadius: _pressed ? 10 : 20,
-                offset: Offset(0, _pressed ? 4 : 10),
-              ),
-            ],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: _pressed ? 0.06 : 0.12), blurRadius: _pressed ? 10 : 20, offset: Offset(0, _pressed ? 4 : 10))],
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.touch_app_outlined,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text('按下缩放 + 抬起恢复，是最常见也最实用的交互反馈动画。'),
-              ),
-              const Icon(Icons.chevron_right),
-            ],
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+class AppStateSwitcher extends StatelessWidget {
+  final Widget child;
+
+  const AppStateSwitcher({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: _AnimationTokens.standard,
+      switchInCurve: _AnimationTokens.enter,
+      switchOutCurve: _AnimationTokens.exit,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SizeTransition(sizeFactor: animation, axisAlignment: -1, child: child),
+      ),
+      child: child,
+    );
+  }
+}
+
+class AppNoticeBanner extends StatelessWidget {
+  final bool visible;
+  final IconData icon;
+  final String message;
+
+  const AppNoticeBanner({super.key, required this.visible, required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AnimatedSlide(
+      duration: _AnimationTokens.emphasized,
+      curve: _AnimationTokens.enter,
+      offset: visible ? Offset.zero : const Offset(0, -0.25),
+      child: AnimatedOpacity(
+        duration: _AnimationTokens.fade,
+        opacity: visible ? 1 : 0,
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: theme.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(16)),
+            child: Row(children: [Icon(icon, color: theme.colorScheme.onPrimaryContainer), const SizedBox(width: 10), Expanded(child: Text(message, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onPrimaryContainer)))]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppExpandableSection extends StatelessWidget {
+  final bool expanded;
+  final double collapsedHeight;
+  final double expandedHeight;
+  final Widget child;
+
+  const AppExpandableSection({super.key, required this.expanded, required this.collapsedHeight, required this.expandedHeight, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: _AnimationTokens.standard,
+      curve: _AnimationTokens.standardCurve,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: expanded ? expandedHeight : collapsedHeight),
+        child: child,
+      ),
+    );
+  }
+}
+
+class AppHeroCard extends StatelessWidget {
+  final String tag;
+  final VoidCallback onTap;
+  final Widget child;
+
+  const AppHeroCard({super.key, required this.tag, required this.onTap, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Hero(
+        tag: tag,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            height: 160,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF9333EA)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20)),
+            child: child,
           ),
         ),
       ),
@@ -582,22 +614,16 @@ class _ErrorPanel extends StatelessWidget {
   }
 }
 
-class _ActionPanel extends StatelessWidget {
-  const _ActionPanel();
+class AppActionSheet extends StatelessWidget {
+  final List<Widget> children;
+
+  const AppActionSheet({super.key, required this.children});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          _ActionTile(icon: Icons.bookmark_border, title: '收藏'),
-          _ActionTile(icon: Icons.share_outlined, title: '分享'),
-          _ActionTile(icon: Icons.link_outlined, title: '复制链接'),
-          _ActionTile(icon: Icons.report_gmailerrorred_outlined, title: '举报'),
-        ],
-      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 }
