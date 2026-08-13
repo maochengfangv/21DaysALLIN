@@ -79,6 +79,13 @@ final class HybridRouter {
         ])
     }
 
+    func requestFlutterBackNavigation(source: String = "native_navigation_bar") {
+        channel?.invokeMethod("systemBack", arguments: [
+            "version": 1,
+            "source": source
+        ])
+    }
+
     private func handleRouteReady(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as? [String: Any]
         let route = args?["route"] as? String

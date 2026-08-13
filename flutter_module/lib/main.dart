@@ -98,6 +98,29 @@ Future<void> closeFlutterWithResult([Map<String, dynamic>? payload]) async {
   });
 }
 
+Future<Map<String, Object?>> popFlutterPageOrCloseContainer({
+  required NavigatorState navigator,
+  Map<String, Object?>? closePayload,
+}) async {
+  final isLastFlutterRoute = !navigator.canPop();
+  if (!isLastFlutterRoute) {
+    navigator.pop();
+    return const <String, Object?>{
+      'target': 'flutter',
+      'isLastFlutterRoute': false,
+    };
+  }
+
+  await closeFlutterWithResult({
+    'reason': 'flutter_root_pop',
+    if (closePayload != null) ...closePayload,
+  });
+  return const <String, Object?>{
+    'target': 'native',
+    'isLastFlutterRoute': true,
+  };
+}
+
 Future<void> openNativeSample() async {
   await HybridChannels.router.invokeMethod('openNative', {
     'version': 1,
@@ -152,6 +175,8 @@ class _HybridAppState extends State<HybridApp> {
         );
       case 'resetToBootstrap':
         return _resetToBootstrap();
+      case 'systemBack':
+        return _handleSystemBack();
       default:
         throw PlatformException(code: 'not_implemented', message: call.method);
     }
@@ -197,6 +222,23 @@ class _HybridAppState extends State<HybridApp> {
     }
 
     navigator.pushNamedAndRemoveUntil('/', (_) => false);
+  }
+
+  Future<Map<String, Object?>> _handleSystemBack() async {
+    final navigator = _navKey.currentState;
+    if (navigator == null) {
+      return const <String, Object?>{
+        'target': 'none',
+        'isLastFlutterRoute': true,
+      };
+    }
+
+    return popFlutterPageOrCloseContainer(
+      navigator: navigator,
+      closePayload: const <String, Object?>{
+        'reason': 'native_navigation_bar_back',
+      },
+    );
   }
 
   @override
@@ -335,7 +377,11 @@ class HybridPageScaffold extends StatelessWidget {
               children: [
                 if (canPop)
                   TextButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
+                    onPressed: () => unawaited(
+                      popFlutterPageOrCloseContainer(
+                        navigator: Navigator.of(context),
+                      ),
+                    ),
                     child: const Text('Back'),
                   )
                 else
@@ -361,16 +407,36 @@ class HybridPageScaffold extends StatelessWidget {
       content = SafeArea(child: content);
     }
 
-    return Scaffold(
-      appBar: navStyle == NavStyle.flutter
-          ? AppBar(
-              title: Text(title),
-              actions: [
-                IconButton(onPressed: onClose, icon: const Icon(Icons.close)),
-              ],
-            )
-          : null,
-      body: content,
+    return WillPopScope(
+      onWillPop: () async {
+        await popFlutterPageOrCloseContainer(
+          navigator: Navigator.of(context),
+          closePayload: <String, Object?>{'reason': 'system_back', 'page': title},
+        );
+        return false;
+      },
+      child: Scaffold(
+        appBar: navStyle == NavStyle.flutter
+            ? AppBar(
+                automaticallyImplyLeading: false,
+                leading: canPop
+                    ? IconButton(
+                        onPressed: () => unawaited(
+                          popFlutterPageOrCloseContainer(
+                            navigator: Navigator.of(context),
+                          ),
+                        ),
+                        icon: const Icon(Icons.arrow_back),
+                      )
+                    : null,
+                title: Text(title),
+                actions: [
+                  IconButton(onPressed: onClose, icon: const Icon(Icons.close)),
+                ],
+              )
+            : null,
+        body: content,
+      ),
     );
   }
 }

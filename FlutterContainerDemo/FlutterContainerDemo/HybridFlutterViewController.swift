@@ -22,10 +22,32 @@ final class HybridFlutterViewController: FlutterViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(navStyle != .native, animated: animated)
+
+        if navStyle == .native {
+            navigationItem.hidesBackButton = true
+            navigationItem.leftBarButtonItem = UIBarButtonItem(
+                title: "Back",
+                style: .plain,
+                target: self,
+                action: #selector(handleNativeBackTapped)
+            )
+        } else {
+            navigationItem.leftBarButtonItem = nil
+        }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        if navStyle == .native {
+            navigationController?.interactivePopGestureRecognizer?.isEnabled = false
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+
+        navigationController?.interactivePopGestureRecognizer?.isEnabled = true
 
         if isMovingFromParent {
             navigationController?.setNavigationBarHidden(false, animated: animated)
@@ -38,5 +60,9 @@ final class HybridFlutterViewController: FlutterViewController {
         if isMovingFromParent {
             HybridRouter.shared.handleFlutterViewControllerDismissed()
         }
+    }
+
+    @objc private func handleNativeBackTapped() {
+        HybridRouter.shared.requestFlutterBackNavigation()
     }
 }

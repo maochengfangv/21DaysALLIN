@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 const int _checksumMod = 1000000007;
+const String _networkSnippet = "final response = await http.get(Uri.parse(url));";
+const String _databaseSnippet = "final rows = await database.query('messages');";
+const String _fileSnippet = "final text = await rootBundle.loadString('assets/demo.json');";
 
 bool _isPrime(int value) {
   if (value < 2) return false;
@@ -121,6 +124,9 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
   int _mainIsolateTick = 0;
   int _workerHeartbeatTick = 0;
   String _lastWorkerHeartbeatAt = '未收到';
+  bool _ioRunning = false;
+  String _ioStatus = '未执行';
+  String _lastIoType = '未执行';
   DateTime? _lastLifecycleChangedAt;
   Timer? _mainIsolateTimer;
   ReceivePort? _lifecycleReceivePort;
@@ -226,6 +232,23 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
     _teardownLifecycleScenario();
     setState(() => _lifecycleScenarioRunning = false);
     _addLog('已停止前后台切换观测场景');
+  }
+
+  Future<void> _runIoTask(String label, Duration delay) async {
+    if (_ioRunning) return;
+    setState(() {
+      _ioRunning = true;
+      _lastIoType = label;
+      _ioStatus = '$label 执行中：使用 await 挂起，不阻塞主 isolate';
+    });
+    _addLog('开始 I/O 异步任务：$label');
+    await Future<void>.delayed(delay);
+    if (!mounted) return;
+    setState(() {
+      _ioRunning = false;
+      _ioStatus = '$label 完成：等待期间动画仍持续，说明 I/O 优先走异步 API';
+    });
+    _addLog('I/O 异步任务完成：$label');
   }
 
   void _addLog(String message) {
@@ -457,6 +480,14 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
     );
   }
 
+  Widget _buildIoCodeTile(String title, String code) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title),
+      subtitle: SelectableText(code),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -612,6 +643,46 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                   subtitle: Text('${result['checksum']}'),
                 ),
               ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('I/O 密集型任务', style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    const Text('网络请求、数据库、文件读取通常是等待外部资源返回，核心是使用异步 API 让主 isolate 继续处理动画与交互，而不是为这类任务优先创建 isolate。'),
+                    const SizedBox(height: 12),
+                    Text('最近执行：$_lastIoType'),
+                    Text(_ioStatus),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        FilledButton.tonal(
+                          onPressed: _ioRunning ? null : () => unawaited(_runIoTask('网络请求', const Duration(seconds: 2))),
+                          child: const Text('模拟网络请求'),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: _ioRunning ? null : () => unawaited(_runIoTask('数据库查询', const Duration(milliseconds: 1600))),
+                          child: const Text('模拟数据库查询'),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: _ioRunning ? null : () => unawaited(_runIoTask('文件读取', const Duration(milliseconds: 1200))),
+                          child: const Text('模拟文件读取'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildIoCodeTile('网络请求关键代码', _networkSnippet),
+                    _buildIoCodeTile('数据库查询关键代码', _databaseSnippet),
+                    _buildIoCodeTile('文件读取关键代码', _fileSnippet),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
             Card(
               child: Padding(
