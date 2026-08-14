@@ -5,6 +5,7 @@ import 'pages/baseline_list_page.dart';
 import 'pages/industry_animation_controls_page.dart';
 import 'pages/optimized_list_page.dart';
 import 'pages/thread_demo_page.dart';
+import 'pages/avatar_demo_four_layers_page.dart';
 
 final ValueNotifier<bool> performanceOverlayEnabled = ValueNotifier<bool>(false);
 
@@ -36,6 +37,8 @@ class DemoApp extends StatelessWidget {
             ThreadDemoPage.routeName: (_) => const ThreadDemoPage(),
             IndustryAnimationControlsPage.routeName: (_) =>
                 const IndustryAnimationControlsPage(),
+            AvatarDemoFourLayersPage.routeName: (_) =>
+                const AvatarDemoFourLayersPage(),
           },
         );
       },
@@ -127,6 +130,12 @@ class HomePage extends StatelessWidget {
             FilledButton.tonal(
               onPressed: () => _open(context, ThreadDemoPage.routeName),
               child: const Text('🧵 Flutter 线程 / Isolate Demo'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: () =>
+                  _open(context, AvatarDemoFourLayersPage.routeName),
+              child: const Text('🧱 四层架构：获取用户头像 Demo'),
             ),
             const SizedBox(height: 16),
             const Text(
