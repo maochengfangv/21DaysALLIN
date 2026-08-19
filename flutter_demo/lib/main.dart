@@ -6,8 +6,32 @@ import 'pages/industry_animation_controls_page.dart';
 import 'pages/optimized_list_page.dart';
 import 'pages/thread_demo_page.dart';
 import 'pages/avatar_demo_four_layers_page.dart';
+import 'ai_chat_demo/presentation/ai_chat_demo_page.dart';
+import 'ai_chat_demo/application/ai_chat_controller.dart';
+import 'ai_chat_demo/application/observe_session_events_use_case.dart';
+import 'ai_chat_demo/application/send_chat_message_use_case.dart';
+import 'ai_chat_demo/application/stop_generation_use_case.dart';
+import 'ai_chat_demo/infrastructure/datasources/mock_sse_chat_data_source.dart';
+import 'ai_chat_demo/infrastructure/datasources/mock_websocket_event_data_source.dart';
+import 'ai_chat_demo/infrastructure/repositories/mock_ai_chat_repository_impl.dart';
 
 final ValueNotifier<bool> performanceOverlayEnabled = ValueNotifier<bool>(false);
+
+const String aiChatDemoRouteName = '/ai-chat-demo';
+
+AiChatController _buildAiChatController() {
+  final repository = MockAiChatRepositoryImpl(
+    sseChatDataSource: MockSseChatDataSource(),
+    websocketEventDataSource: MockWebSocketEventDataSource(),
+  );
+
+  return AiChatController(
+    sendChatMessageUseCase: SendChatMessageUseCase(repository),
+    stopGenerationUseCase: StopGenerationUseCase(repository),
+    observeSessionEventsUseCase: ObserveSessionEventsUseCase(repository),
+    disposeRepository: repository.dispose,
+  );
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +63,9 @@ class DemoApp extends StatelessWidget {
                 const IndustryAnimationControlsPage(),
             AvatarDemoFourLayersPage.routeName: (_) =>
                 const AvatarDemoFourLayersPage(),
+            aiChatDemoRouteName: (_) => AiChatDemoPage(
+                  controller: _buildAiChatController(),
+                ),
           },
         );
       },
@@ -136,6 +163,11 @@ class HomePage extends StatelessWidget {
               onPressed: () =>
                   _open(context, AvatarDemoFourLayersPage.routeName),
               child: const Text('🧱 四层架构：获取用户头像 Demo'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: () => _open(context, aiChatDemoRouteName),
+              child: const Text('🤖 AI Chat：SSE + WebSocket Demo'),
             ),
             const SizedBox(height: 16),
             const Text(
