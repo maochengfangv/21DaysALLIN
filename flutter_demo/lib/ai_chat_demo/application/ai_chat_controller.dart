@@ -57,8 +57,8 @@ class AiChatController extends ChangeNotifier {
       }
 
       _sessionEvents.add(event);
-      if(_sessionEvents.length > 6) {
-        _messages.removeAt(0);
+      if (_sessionEvents.length > 6) {
+        _sessionEvents.removeAt(0);
       }
       notifyListeners();
     });
@@ -138,6 +138,7 @@ class AiChatController extends ChangeNotifier {
     await stopGenerationUseCase(_currentAssistantMessageId!);
   }
 
+  @override
   void dispose() {
     _replySubscription?.cancel();
     _sessionSubscription?.cancel();
