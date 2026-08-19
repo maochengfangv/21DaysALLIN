@@ -35,7 +35,7 @@ void main() {
 
       for (var i = 0; i < 7; i++) {
         repository.emitSessionEvent(
-          SessionRealtimeEvent.systemHint(description: 'event_$i'),
+          SystemHintEvent(description: 'event_$i'),
         );
       }
       await Future<void>.delayed(Duration.zero);
@@ -64,16 +64,16 @@ void main() {
       final assistantMessageId = controller.messages[2].id;
 
       repository.emitReplyEvent(
-        ReplyStreamEvent.started(messageId: assistantMessageId),
+        ReplyStarted(messageId: assistantMessageId),
       );
       repository.emitReplyEvent(
-        ReplyStreamEvent.delta(messageId: assistantMessageId, text: 'SSE 负责'),
+        ReplyDelta(messageId: assistantMessageId, text: 'SSE 负责'),
       );
       repository.emitReplyEvent(
-        ReplyStreamEvent.delta(messageId: assistantMessageId, text: '正文流式输出'),
+        ReplyDelta(messageId: assistantMessageId, text: '正文流式输出'),
       );
       repository.emitReplyEvent(
-        ReplyStreamEvent.finished(messageId: assistantMessageId),
+        ReplyFinished(messageId: assistantMessageId),
       );
       await Future<void>.delayed(Duration.zero);
 

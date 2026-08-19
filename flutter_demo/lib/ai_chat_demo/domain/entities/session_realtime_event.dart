@@ -1,39 +1,31 @@
-enum SessionRealtimeEventType {
-  connectionStateChanged, /// 连接状态改变
-  unreadChanged, /// 未读消息改变
-  sessionUpdated, /// 会话更新
-  systemHint, /// 系统提示
+sealed class SessionRealtimeEvent {
+  const SessionRealtimeEvent({required this.description});
+
+  final String description;
 }
 
-class SessionRealtimeEvent {
-
-  final SessionRealtimeEventType type;
-  final String description;
-  final bool? connected;
-  final int? unreadCount;
-
-  const SessionRealtimeEvent._({
-    required this.type,
-    required this.description,
-    this.connected,
-    this.unreadCount
+final class ConnectionStateChangedEvent extends SessionRealtimeEvent {
+  const ConnectionStateChangedEvent({
+    required super.description,
+    required this.connected,
   });
 
-  const SessionRealtimeEvent.connectionStateChanged({
-    required bool connected,
-    required String description,
-  }) : this._(type: SessionRealtimeEventType.connectionStateChanged, description: description, connected: connected);
-  
-  const SessionRealtimeEvent.unreadChanged({
-    required int unreadCount,
-    required String description,
-  }) : this._(type: SessionRealtimeEventType.unreadChanged, description: description, unreadCount: unreadCount);
-  
-  const SessionRealtimeEvent.sessionUpdated({
-    required String description,
-  }) : this._(type: SessionRealtimeEventType.sessionUpdated, description: description);
-  
-  const SessionRealtimeEvent.systemHint({
-    required String description,
-  }) : this._(type: SessionRealtimeEventType.systemHint, description: description);
+  final bool connected;
+}
+
+final class UnreadChangedEvent extends SessionRealtimeEvent {
+  const UnreadChangedEvent({
+    required super.description,
+    required this.unreadCount,
+  });
+
+  final int unreadCount;
+}
+
+final class SessionUpdatedEvent extends SessionRealtimeEvent {
+  const SessionUpdatedEvent({required super.description});
+}
+
+final class SystemHintEvent extends SessionRealtimeEvent {
+  const SystemHintEvent({required super.description});
 }

@@ -1,63 +1,31 @@
-enum ReplyStreamEventType {
- started, /// 开始
- status, /// 状态更新
- delta, /// 增量内容
- finished, /// 完成
- failed, /// 失败
+sealed class ReplyStreamEvent {
+  const ReplyStreamEvent({required this.messageId});
+
+  final String messageId;
 }
 
-class ReplyStreamEvent {
-  final ReplyStreamEventType type;
-  final String messageId;
-  final String? text;
-  final String? error;
+final class ReplyStarted extends ReplyStreamEvent {
+  const ReplyStarted({required super.messageId});
+}
 
- const ReplyStreamEvent._({
-    required this.type,
-    required this.messageId,
-    this.text,
-    this.error,
-  });
- 
- const ReplyStreamEvent.started({
-    required String messageId,
-  }) : this._(
-    type: ReplyStreamEventType.started,
-    messageId: messageId,
-  );
+final class ReplyStatus extends ReplyStreamEvent {
+  const ReplyStatus({required super.messageId, required this.text});
 
-const ReplyStreamEvent.status({
-    required String messageId,
-    required String text,
-  }) : this._(
-    type: ReplyStreamEventType.status,
-    messageId: messageId,
-    text: text,
-  );
+  final String text;
+}
 
-  const ReplyStreamEvent.delta({
-    required String messageId,
-    required String text,
-  }) : this._(
-    type: ReplyStreamEventType.delta,
-    messageId: messageId,
-    text: text,
-  );
+final class ReplyDelta extends ReplyStreamEvent {
+  const ReplyDelta({required super.messageId, required this.text});
 
-  const ReplyStreamEvent.finished({
-    required String messageId,
-  }) : this._(
-    type: ReplyStreamEventType.finished,
-    messageId: messageId,
-  );
+  final String text;
+}
 
-  const ReplyStreamEvent.failed({
-    required String messageId,
-    required String error,
-  }) : this._(
-    type: ReplyStreamEventType.failed,
-    messageId: messageId,
-    error: error,
-  );
+final class ReplyFinished extends ReplyStreamEvent {
+  const ReplyFinished({required super.messageId});
+}
 
+final class ReplyFailed extends ReplyStreamEvent {
+  const ReplyFailed({required super.messageId, required this.error});
+
+  final String error;
 }

@@ -14,7 +14,7 @@ class MockSseChatDataSource {
      debugPrint('[基础设施层][SSE] 建立回答流 assistantMessageId=$assistantMessageId');
     _stopFlags[assistantMessageId] = false;
     try {
-      yield ReplyStreamEvent.started(messageId: assistantMessageId);
+      yield ReplyStarted(messageId: assistantMessageId);
       
       const steps = <String> [
         '正在检索知识库',
@@ -25,29 +25,29 @@ class MockSseChatDataSource {
       for (final step in steps) {
 
         if (_shouldStop(assistantMessageId)) {
-          yield ReplyStreamEvent.status(messageId: assistantMessageId, text: '用户已停止生成');
-          yield ReplyStreamEvent.finished(messageId: assistantMessageId); 
+          yield ReplyStatus(messageId: assistantMessageId, text: '用户已停止生成');
+          yield ReplyFinished(messageId: assistantMessageId); 
           return;
         }
 
         await Future.delayed(const Duration(milliseconds: 650));
-        yield ReplyStreamEvent.status(messageId: assistantMessageId, text: step);
+        yield ReplyStatus(messageId: assistantMessageId, text: step);
       }
 
       final chunks = _splitAnswer(_buildMockAnswer(userInput));
       for (final chunk in chunks) {
         if(_shouldStop(assistantMessageId)) {
-          yield ReplyStreamEvent.status(messageId: assistantMessageId, text: '用户已停止生成');
-          yield ReplyStreamEvent.finished(messageId: assistantMessageId); 
+          yield ReplyStatus(messageId: assistantMessageId, text: '用户已停止生成');
+          yield ReplyFinished(messageId: assistantMessageId); 
           return;
         }
         await Future.delayed(const Duration(milliseconds: 220));
-        yield ReplyStreamEvent.delta(messageId: assistantMessageId, text: chunk);
+        yield ReplyDelta(messageId: assistantMessageId, text: chunk);
       }
 
-      yield ReplyStreamEvent.finished(messageId: assistantMessageId); 
+      yield ReplyFinished(messageId: assistantMessageId); 
     } catch (error) {
-      yield ReplyStreamEvent.failed(messageId: assistantMessageId, error: error.toString());
+      yield ReplyFailed(messageId: assistantMessageId, error: error.toString());
     } finally {
       _stopFlags.remove(assistantMessageId);
     }

@@ -48,12 +48,14 @@ class AiChatController extends ChangeNotifier {
     _sessionSubscription = observeSessionEventsUseCase().listen((event) {
       debugPrint('[展示层/Controller] 收到实时事件: ${event.description}');
 
-      if (event.type == SessionRealtimeEventType.connectionStateChanged) {
-        _isConnected = event.connected ?? false;
-      }
-
-      if (event.type == SessionRealtimeEventType.unreadChanged) {
-        _unreadCount = event.unreadCount ?? _unreadCount;
+      switch (event) {
+        case ConnectionStateChangedEvent(:final connected):
+          _isConnected = connected;
+        case UnreadChangedEvent(:final unreadCount):
+          _unreadCount = unreadCount;
+        case SessionUpdatedEvent():
+        case SystemHintEvent():
+          break;
       }
 
       _sessionEvents.add(event);
@@ -87,29 +89,26 @@ class AiChatController extends ChangeNotifier {
 }
 
   void _handleReplyEvent(ReplyStreamEvent event) {
-     debugPrint('[展示层/Controller] 收到回复流事件: ${event.type}');
-     switch (event.type){
-       case ReplyStreamEventType.started:
+    debugPrint('[展示层/Controller] 收到回复流事件: ${event.runtimeType}');
+
+    switch (event) {
+      case ReplyStarted():
         _appendReplyStep('SSE 已建立连接，开始接收模型输出');
-         break;
-       case ReplyStreamEventType.status:
-        _appendReplyStep(event.text ?? '');
-         break;
-        case ReplyStreamEventType.delta:
-        _appendDelta(event.messageId, event.text ?? '');
-         break;
-       case ReplyStreamEventType.finished:
-       _appendReplyStep('本次回答已完成');
+      case ReplyStatus(:final text):
+        _appendReplyStep(text);
+      case ReplyDelta(:final messageId, :final text):
+        _appendDelta(messageId, text);
+      case ReplyFinished():
+        _appendReplyStep('本次回答已完成');
         _isGenerating = false;
         _currentAssistantMessageId = null;
-         break;
-        case ReplyStreamEventType.failed:
-       _appendReplyStep('生成失败: ${event.error}');
+      case ReplyFailed(:final error):
+        _appendReplyStep('生成失败: $error');
         _isGenerating = false;
         _currentAssistantMessageId = null;
-         break;
-     }
-      notifyListeners();
+    }
+
+    notifyListeners();
   }
 
   void _appendReplyStep(String step) {
