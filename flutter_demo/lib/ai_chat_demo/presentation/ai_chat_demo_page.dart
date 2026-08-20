@@ -15,11 +15,20 @@ class AiChatDemoPage extends StatefulWidget {
 
 class _AiChatDemoPageState extends State<AiChatDemoPage> {
   final TextEditingController _inputController = TextEditingController();
+  final ScrollController _messageScrollController = ScrollController();
+  int _lastMessageCount = 0;
+  bool _lastKeyboardVisible = false;
+
   @override
   void dispose() {
     _inputController.dispose();
+    _messageScrollController.dispose();
     widget.controller.dispose();
     super.dispose();
+  }
+
+  void _dismissKeyboard() {
+    FocusScope.of(context).unfocus();
   }
 
   Future<void> _handleSend() async {
@@ -28,7 +37,24 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
     return;
    }
    _inputController.clear();
+   _dismissKeyboard();
    await widget.controller.sendMessage(text);
+  }
+
+  void _scheduleScrollToBottom({bool animated = true}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_messageScrollController.hasClients) return;
+      final position = _messageScrollController.position.maxScrollExtent;
+      if (animated) {
+        _messageScrollController.animateTo(
+          position,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _messageScrollController.jumpTo(position);
+      }
+    });
   }
 
   @override
@@ -39,33 +65,46 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
         final controller = widget.controller;
         final isKeyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
+        if (controller.messages.length != _lastMessageCount) {
+          _lastMessageCount = controller.messages.length;
+          _scheduleScrollToBottom();
+        } else if (isKeyboardVisible && !_lastKeyboardVisible) {
+          _scheduleScrollToBottom();
+        }
+        _lastKeyboardVisible = isKeyboardVisible;
+
         return Scaffold(
           appBar: AppBar(
             title: const Text('AI Chat：SSE + WebSocket Demo'),
           ),
-          body: Column(
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                child: isKeyboardVisible
-                    ? const SizedBox(
-                        key: ValueKey('top-panel-hidden'),
-                      )
-                    : Column(
-                        key: const ValueKey('top-panel-visible'),
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildTopPanel(context, controller),
-                          const Divider(height: 1),
-                        ],
-                      ),
+          body: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _dismissKeyboard,
+            child: Column(
+              children: [
+              ClipRect(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
+                  child: isKeyboardVisible
+                      ? const SizedBox.shrink()
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildTopPanel(context, controller),
+                            const Divider(height: 1),
+                          ],
+                        ),
+                ),
               ),
               Expanded(
                 child: controller.messages.isEmpty
                     ? const Center(child: Text('还没有消息'))
                     : ListView.builder(
+                        controller: _messageScrollController,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: const EdgeInsets.all(12),
                         itemCount: controller.messages.length,
                         itemBuilder: (context, index) {
@@ -76,6 +115,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
               const Divider(height: 1),
               _buildInputBar(context, controller),
             ],
+          ),
           ),
         );
       },
@@ -295,7 +335,7 @@ class _MessageBubble extends StatelessWidget {
       case ChatMessageStatus.canceled:
         return (
           message.content.isEmpty ? '本次回答已取消' : message.content,
-          colorScheme.surfaceVariant,
+          colorScheme.surfaceContainerHighest,
           message.errorMessage ?? '用户已停止生成',
         );
       case ChatMessageStatus.failed:
@@ -316,13 +356,13 @@ class _MessageBubble extends StatelessWidget {
       case ChatRole.assistant:
         switch (message.status) {
           case ChatMessageStatus.failed:
-            return colorScheme.error.withOpacity(0.4);
+            return colorScheme.error.withValues(alpha: 0.4);
           case ChatMessageStatus.canceled:
             return colorScheme.outlineVariant;
           case ChatMessageStatus.streaming:
-            return colorScheme.primary.withOpacity(0.35);
+            return colorScheme.primary.withValues(alpha: 0.35);
           case ChatMessageStatus.pending:
-            return colorScheme.primary.withOpacity(0.2);
+            return colorScheme.primary.withValues(alpha: 0.2);
           case ChatMessageStatus.ready:
           case ChatMessageStatus.completed:
             return Colors.transparent;
