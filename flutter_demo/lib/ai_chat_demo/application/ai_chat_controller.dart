@@ -98,10 +98,12 @@ class AiChatController extends ChangeNotifier {
         'assistant_${DateTime.now().microsecondsSinceEpoch}';
 
     final assistantPlaceholder = ChatMessage(
-        id: asssistantMessageId,
-        role: ChatRole.assistant,
-        content: '',
-        createdAt: DateTime.now());
+      id: asssistantMessageId,
+      role: ChatRole.assistant,
+      content: '',
+      createdAt: DateTime.now(),
+      status: ChatMessageStatus.pending,
+    );
 
     _messages.add(userMessage);
     _messages.add(assistantPlaceholder);
@@ -126,14 +128,17 @@ class AiChatController extends ChangeNotifier {
 
     switch (event) {
       case ReplyStarted(:final messageId):
-       const step = 'SSE 已建立连接，开始接收模型输出';
+        const step = 'SSE 已建立连接，开始接收模型输出';
         _appendReplyStep(step);
-         _transitionTo(PreparingState(assistantMessageId: messageId, step: step));
-      case ReplyStatus(:final messageId,:final text):
+        _updateMessageStatus(messageId, ChatMessageStatus.streaming);
+        _transitionTo(PreparingState(assistantMessageId: messageId, step: step));
+      case ReplyStatus(:final messageId, :final text):
         _appendReplyStep(text);
-         _transitionTo(PreparingState(assistantMessageId: messageId, step: text));
+        _updateMessageStatus(messageId, ChatMessageStatus.streaming);
+        _transitionTo(PreparingState(assistantMessageId: messageId, step: text));
       case ReplyDelta(:final messageId, :final text):
         _appendDelta(messageId, text);
+        _updateMessageStatus(messageId, ChatMessageStatus.streaming);
         _transitionTo(
           StreamingState(
             assistantMessageId: messageId,
@@ -142,14 +147,17 @@ class AiChatController extends ChangeNotifier {
         );
       case ReplyFinished(:final messageId):
         _appendReplyStep('本次回答已完成');
-         _transitionTo(CompletedState(assistantMessageId: messageId));
+        _updateMessageStatus(messageId, ChatMessageStatus.completed);
+        _transitionTo(CompletedState(assistantMessageId: messageId));
       case ReplyCanceled(:final messageId, :final reason):
         _appendReplyStep(reason);
+        _updateMessageStatus(messageId, ChatMessageStatus.canceled, errorMessage: reason);
         _transitionTo(
           CanceledState(assistantMessageId: messageId, reason: reason),
         );
-      case ReplyFailed(:final messageId,:final error):
+      case ReplyFailed(:final messageId, :final error):
         _appendReplyStep('生成失败: $error');
+        _updateMessageStatus(messageId, ChatMessageStatus.failed, errorMessage: error);
         _transitionTo(FailedState(assistantMessageId: messageId, error: error));
     }
 
@@ -200,7 +208,23 @@ class AiChatController extends ChangeNotifier {
     return _messages[index].content.length;
   }
 
-   void _transitionTo(ChatGenerationState nextState) {
+  void _updateMessageStatus(
+    String messageId,
+    ChatMessageStatus status, {
+    String? errorMessage,
+  }) {
+    final index = _messages.indexWhere((element) => element.id == messageId);
+    if (index == -1) {
+      return;
+    }
+    final current = _messages[index];
+    _messages[index] = current.copyWith(
+      status: status,
+      errorMessage: errorMessage ?? current.errorMessage,
+    );
+  }
+
+  void _transitionTo(ChatGenerationState nextState) {
     _generationState = nextState;
   }
 }

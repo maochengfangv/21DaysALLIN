@@ -127,6 +127,61 @@ void main() {
       expect(controller.canStop, isFalse);
       expect(controller.isGenerating, isFalse);
       expect(controller.replySteps, contains('生成失败: 网络异常'));
+
+      final failedMessage = controller.messages.last;
+      expect(failedMessage.status, ChatMessageStatus.failed);
+      expect(failedMessage.errorMessage, '网络异常');
+    });
+
+    test('assistant 消息状态按 pending -> streaming -> completed 迁移', () async {
+      await controller.sendMessage('消息状态迁移怎么建模？');
+
+      final assistantMessageId = controller.messages.last.id;
+      final assistantMessage = controller.messages.last;
+      expect(assistantMessage.status, ChatMessageStatus.pending);
+
+      repository.emitReplyEvent(ReplyStarted(messageId: assistantMessageId));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.messages.last.status, ChatMessageStatus.streaming);
+
+      repository.emitReplyEvent(
+        ReplyDelta(messageId: assistantMessageId, text: '1. 按消息维度'),
+      );
+      repository.emitReplyEvent(
+        ReplyDelta(messageId: assistantMessageId, text: ' 2. 区分 pending/streaming/终态'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.messages.last.status, ChatMessageStatus.streaming);
+      expect(controller.messages.last.content, '1. 按消息维度 2. 区分 pending/streaming/终态');
+
+      repository.emitReplyEvent(ReplyFinished(messageId: assistantMessageId));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.messages.last.status, ChatMessageStatus.completed);
+      expect(controller.messages.last.errorMessage, isNull);
+    });
+
+    test('stopping 后 assistant 消息进入 canceled，并保留取消原因', () async {
+      await controller.sendMessage('我准备在半路停止这次生成');
+      final assistantMessageId = controller.messages.last.id;
+      repository.emitReplyEvent(ReplyStarted(messageId: assistantMessageId));
+      repository.emitReplyEvent(
+        ReplyDelta(messageId: assistantMessageId, text: '我正在生成前半段'),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      await controller.stopGenerating();
+      expect(controller.generationState, isA<StoppingState>());
+      expect(controller.messages.last.status, ChatMessageStatus.streaming);
+
+      repository.emitReplyEvent(
+        ReplyCanceled(messageId: assistantMessageId, reason: '用户主动取消'),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final canceledMessage = controller.messages.last;
+      expect(canceledMessage.status, ChatMessageStatus.canceled);
+      expect(canceledMessage.errorMessage, '用户主动取消');
+      expect(canceledMessage.content, '我正在生成前半段');
     });
   });
 }
