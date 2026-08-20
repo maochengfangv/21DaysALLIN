@@ -37,6 +37,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
       animation: widget.controller,
       builder: (context, _) {
         final controller = widget.controller;
+        final isKeyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
         return Scaffold(
           appBar: AppBar(
@@ -44,7 +45,15 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
           ),
           body: Column(
             children: [
-              _buildTopPanel(context, controller),
+              if (isKeyboardVisible)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 140),
+                  child: SingleChildScrollView(
+                    child: _buildTopPanel(context, controller),
+                  ),
+                )
+              else
+                _buildTopPanel(context, controller),
               const Divider(height: 1),
               Expanded(
                 child: controller.messages.isEmpty
