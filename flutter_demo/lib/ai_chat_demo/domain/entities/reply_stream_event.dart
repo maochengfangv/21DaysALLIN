@@ -1,3 +1,5 @@
+import 'message_content_format.dart';
+
 sealed class ReplyStreamEvent {
   const ReplyStreamEvent({required this.messageId});
 
@@ -5,7 +7,12 @@ sealed class ReplyStreamEvent {
 }
 
 final class ReplyStarted extends ReplyStreamEvent {
-  const ReplyStarted({required super.messageId});
+  const ReplyStarted({
+    required super.messageId,
+    this.contentFormat = MessageContentFormat.plainText,
+  });
+
+  final MessageContentFormat contentFormat;
 }
 
 final class ReplyStatus extends ReplyStreamEvent {

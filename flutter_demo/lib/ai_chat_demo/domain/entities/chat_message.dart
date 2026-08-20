@@ -1,3 +1,5 @@
+import 'message_content_format.dart';
+
 enum ChatRole { user, assistant, system }
 
 enum ChatMessageStatus {
@@ -15,6 +17,7 @@ class ChatMessage {
   final String content;
   final DateTime createdAt;
   final ChatMessageStatus status;
+  final MessageContentFormat contentFormat;
   final String? errorMessage;
 
   ChatMessage({
@@ -23,6 +26,7 @@ class ChatMessage {
     required this.content,
     required this.createdAt,
     this.status = ChatMessageStatus.ready,
+    this.contentFormat = MessageContentFormat.plainText,
     this.errorMessage,
   });
 
@@ -32,6 +36,7 @@ class ChatMessage {
     String? content,
     DateTime? createdAt,
     ChatMessageStatus? status,
+    MessageContentFormat? contentFormat,
     String? errorMessage,
   }) {
     return ChatMessage(
@@ -40,6 +45,7 @@ class ChatMessage {
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
+      contentFormat: contentFormat ?? this.contentFormat,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }

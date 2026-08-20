@@ -7,6 +7,7 @@ import 'package:flutter_demo/ai_chat_demo/application/stop_generation_use_case.d
 import 'chat_generation_state.dart';
 
 import '../domain/entities/chat_message.dart';
+import '../domain/entities/message_content_format.dart';
 import '../domain/entities/reply_stream_event.dart';
 import '../domain/entities/session_realtime_event.dart';
 
@@ -127,9 +128,10 @@ class AiChatController extends ChangeNotifier {
     debugPrint('[展示层/Controller] 收到回复流事件: ${event.runtimeType}');
 
     switch (event) {
-      case ReplyStarted(:final messageId):
+      case ReplyStarted(:final messageId, :final contentFormat):
         const step = 'SSE 已建立连接，开始接收模型输出';
         _appendReplyStep(step);
+        _updateMessageContentFormat(messageId, contentFormat);
         _updateMessageStatus(messageId, ChatMessageStatus.streaming);
         _transitionTo(PreparingState(assistantMessageId: messageId, step: step));
       case ReplyStatus(:final messageId, :final text):
@@ -222,6 +224,18 @@ class AiChatController extends ChangeNotifier {
       status: status,
       errorMessage: errorMessage ?? current.errorMessage,
     );
+  }
+
+  void _updateMessageContentFormat(
+    String messageId,
+    MessageContentFormat contentFormat,
+  ) {
+    final index = _messages.indexWhere((element) => element.id == messageId);
+    if (index == -1) {
+      return;
+    }
+    final current = _messages[index];
+    _messages[index] = current.copyWith(contentFormat: contentFormat);
   }
 
   void _transitionTo(ChatGenerationState nextState) {

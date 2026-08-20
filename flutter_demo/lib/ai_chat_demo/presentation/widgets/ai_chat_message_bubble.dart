@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/message_content_format.dart';
 
 class AiChatMessageBubble extends StatelessWidget {
   final ChatMessage message;
@@ -58,7 +60,7 @@ class AiChatMessageBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(displayText),
+            _buildContent(context, displayText),
             if (statusHint != null) ...[
               const SizedBox(height: 6),
               Text(
@@ -117,6 +119,28 @@ class AiChatMessageBubble extends StatelessWidget {
           message.errorMessage ?? '生成失败',
         );
     }
+  }
+
+  Widget _buildContent(BuildContext context, String displayText) {
+    if (message.contentFormat == MessageContentFormat.markdown) {
+      return MarkdownBody(
+        data: displayText,
+        selectable: true,
+        shrinkWrap: true,
+        onTapLink: (text, href, title) {
+          if (href == null || href.isEmpty) return;
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text('检测到链接：$href'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+        },
+      );
+    }
+    return Text(displayText);
   }
 
   Color _resolveBorderColor(ColorScheme colorScheme) {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../domain/entities/message_content_format.dart';
 import '../../domain/entities/reply_stream_event.dart';
 
 class MockSseChatDataSource {
@@ -14,7 +15,10 @@ class MockSseChatDataSource {
      debugPrint('[基础设施层][SSE] 建立回答流 assistantMessageId=$assistantMessageId');
     _stopFlags[assistantMessageId] = false;
     try {
-      yield ReplyStarted(messageId: assistantMessageId);
+      yield ReplyStarted(
+        messageId: assistantMessageId,
+        contentFormat: MessageContentFormat.markdown,
+      );
       
       const steps = <String> [
         '正在检索知识库',
@@ -66,15 +70,21 @@ class MockSseChatDataSource {
   }
 
     String _buildMockAnswer(String userInput) {
-    return '你刚刚输入的是“$userInput”。'
-        '在这个 Demo 里，SSE 负责持续把大模型 token 一段段推给前端，'
-        '所以你会看到类似打字机的流式回复效果。'
-        '与此同时，WebSocket 不负责正文输出，而是负责会话状态、未读数、连接状态等实时事件。'
-        '这就是 AI 聊天 App 中“回答流”和“事件流”拆分的典型落地方式。';
+    return '# AI 回答示例\n\n'
+        '你刚刚输入的是：**$userInput**。\n\n'
+        '这是一次通过 SSE 返回的 Markdown 富文本示例：\n\n'
+        '- 支持列表\n'
+        '- 支持 **加粗** 与 *斜体*\n'
+        '- 支持 [Flutter 官网](https://flutter.dev) 链接\n\n'
+        '![示例图片](https://picsum.photos/320/180)\n\n'
+        '> WebSocket 继续负责会话状态、未读数、连接状态等实时事件。\n\n'
+        '```dart\n'
+        'debugPrint("SSE streaming markdown demo");\n'
+        '```';
   }
 
   List<String> _splitAnswer(String text) {
-    const chunkSize = 12;
+    const chunkSize = 24;
     final result = <String>[];
     for (var i = 0; i < text.length; i += chunkSize) {
       final end = (i + chunkSize < text.length) ? i + chunkSize : text.length;
