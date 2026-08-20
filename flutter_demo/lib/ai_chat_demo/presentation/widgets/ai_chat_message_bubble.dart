@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/message_content_format.dart';
@@ -127,20 +128,46 @@ class AiChatMessageBubble extends StatelessWidget {
         data: displayText,
         selectable: true,
         shrinkWrap: true,
-        onTapLink: (text, href, title) {
-          if (href == null || href.isEmpty) return;
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              SnackBar(
-                content: Text('检测到链接：$href'),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-        },
+        onTapLink: (text, href, title) => _handleTapLink(context, href),
       );
     }
     return Text(displayText);
+  }
+
+  Future<void> _handleTapLink(BuildContext context, String? href) async {
+        debugPrint('[_handleTapLink]  -> $href');
+
+    if (href == null || href.isEmpty) {
+      return;
+    }
+
+    final uri = Uri.tryParse(href);
+    if (uri == null) {
+      _showLinkToast(context, '链接地址无效');
+      return;
+    }
+
+    final canOpen = await canLaunchUrl(uri);
+    if (!canOpen) {
+      _showLinkToast(context, '暂时无法打开链接');
+      return;
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      _showLinkToast(context, '打开链接失败');
+    }
+  }
+
+  void _showLinkToast(BuildContext context, String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   Color _resolveBorderColor(ColorScheme colorScheme) {
