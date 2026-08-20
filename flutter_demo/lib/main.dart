@@ -85,10 +85,9 @@ class HomePage extends StatelessWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: Padding(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
+        children: [
             Card(
               elevation: 0,
               color: color.surfaceContainerHighest,
@@ -154,8 +153,7 @@ class HomePage extends StatelessWidget {
               '建议在 Profile 模式 + DevTools Performance 面板下对比。\n可先打开 Overlay 开关进行肉眼观察。',
               textAlign: TextAlign.center,
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
