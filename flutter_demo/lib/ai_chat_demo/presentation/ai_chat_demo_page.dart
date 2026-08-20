@@ -45,16 +45,23 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
           ),
           body: Column(
             children: [
-              if (isKeyboardVisible)
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 140),
-                  child: SingleChildScrollView(
-                    child: _buildTopPanel(context, controller),
-                  ),
-                )
-              else
-                _buildTopPanel(context, controller),
-              const Divider(height: 1),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child: isKeyboardVisible
+                    ? const SizedBox(
+                        key: ValueKey('top-panel-hidden'),
+                      )
+                    : Column(
+                        key: const ValueKey('top-panel-visible'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildTopPanel(context, controller),
+                          const Divider(height: 1),
+                        ],
+                      ),
+              ),
               Expanded(
                 child: controller.messages.isEmpty
                     ? const Center(child: Text('还没有消息'))
