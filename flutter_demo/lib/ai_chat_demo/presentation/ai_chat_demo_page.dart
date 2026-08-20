@@ -96,7 +96,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
               Chip(label: Text('未读数: ${controller.unreadCount}')),
               Chip(
                 label: Text(
-                  controller.isGenerating ? 'SSE 生成中' : 'SSE 空闲',
+                  controller.generationLabel,
                 ),
               ),
             ],
@@ -140,14 +140,12 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
             ),
             const SizedBox(width: 8),
             FilledButton(
-              onPressed: controller.isGenerating ? null : _handleSend,
+              onPressed: controller.canSend ? _handleSend : null,
               child: const Text('发送'),
             ),
             const SizedBox(width: 8),
             FilledButton.tonal(
-              onPressed: controller.isGenerating
-                  ? controller.stopGenerating
-                  : null,
+              onPressed: controller.canStop ? controller.stopGenerating : null,
               child: const Text('停止'),
             ),
           ],

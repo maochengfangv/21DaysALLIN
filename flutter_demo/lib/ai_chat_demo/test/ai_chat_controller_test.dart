@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_demo/ai_chat_demo/application/ai_chat_controller.dart';
+import 'package:flutter_demo/ai_chat_demo/application/chat_generation_state.dart';
 import 'package:flutter_demo/ai_chat_demo/application/observe_session_events_use_case.dart';
 import 'package:flutter_demo/ai_chat_demo/application/send_chat_message_use_case.dart';
 import 'package:flutter_demo/ai_chat_demo/application/stop_generation_use_case.dart';
@@ -54,6 +55,8 @@ void main() {
     test('sendMessage 后 assistant 占位消息能被 delta 增量拼接', () async {
       await controller.sendMessage('SSE 和 WebSocket 怎么分工？');
 
+      expect(controller.generationState, isA<PreparingState>());
+      expect(controller.generationLabel, 'SSE 准备中');
       expect(controller.isGenerating, isTrue);
       expect(controller.messages.length, 3);
       expect(controller.messages[1].role, ChatRole.user);
@@ -80,10 +83,12 @@ void main() {
       expect(controller.messages[2].content, 'SSE 负责正文流式输出');
       expect(controller.replySteps, contains('SSE 已建立连接，开始接收模型输出'));
       expect(controller.replySteps, contains('本次回答已完成'));
+      expect(controller.generationState, isA<CompletedState>());
+      expect(controller.generationLabel, 'SSE 已完成');
       expect(controller.isGenerating, isFalse);
     });
 
-    test('stopGenerating 只在生成中触发 stopReply', () async {
+    test('stopGenerating 进入 stopping 态，并在 canceled 事件后结束', () async {
       await controller.stopGenerating();
       expect(repository.stopReplyCalls, isEmpty);
 
@@ -91,8 +96,37 @@ void main() {
       final assistantMessageId = controller.messages.last.id;
 
       await controller.stopGenerating();
-
+      expect(controller.generationState, isA<StoppingState>());
+      expect(controller.generationLabel, 'SSE 停止中');
       expect(repository.stopReplyCalls, [assistantMessageId]);
+
+      repository.emitReplyEvent(
+        ReplyCanceled(messageId: assistantMessageId, reason: '用户已停止生成'),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.generationState, isA<CanceledState>());
+      expect(controller.generationLabel, 'SSE 已取消');
+      expect(controller.canSend, isTrue);
+      expect(controller.canStop, isFalse);
+      expect(controller.replySteps, contains('用户已停止生成'));
+    });
+
+    test('ReplyFailed 迁移到 FailedState，并恢复 canSend 禁用 canStop', () async {
+      await controller.sendMessage('我会触发一次失败');
+      final assistantMessageId = controller.messages.last.id;
+
+      repository.emitReplyEvent(
+        ReplyFailed(messageId: assistantMessageId, error: '网络异常'),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.generationState, isA<FailedState>());
+      expect(controller.generationLabel, 'SSE 失败');
+      expect(controller.canSend, isTrue);
+      expect(controller.canStop, isFalse);
+      expect(controller.isGenerating, isFalse);
+      expect(controller.replySteps, contains('生成失败: 网络异常'));
     });
   });
 }

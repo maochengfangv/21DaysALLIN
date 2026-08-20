@@ -4,10 +4,11 @@ import 'package:flutter_demo/ai_chat_demo/application/observe_session_events_use
 import 'package:flutter_demo/ai_chat_demo/application/send_chat_message_use_case.dart';
 import 'package:flutter_demo/ai_chat_demo/application/stop_generation_use_case.dart';
 
+import 'chat_generation_state.dart';
+
 import '../domain/entities/chat_message.dart';
 import '../domain/entities/reply_stream_event.dart';
 import '../domain/entities/session_realtime_event.dart';
-
 
 class AiChatController extends ChangeNotifier {
   final SendChatMessageUseCase sendChatMessageUseCase;
@@ -21,9 +22,13 @@ class AiChatController extends ChangeNotifier {
     required this.observeSessionEventsUseCase,
     required this.disposeRepository,
   }) {
-        _listenSessionEvents();
-        _messages.add(ChatMessage(id: 'welcome', role: ChatRole.system, content: '这是一个离线可运行 Demo：SSE 负责回答流，WebSocket 负责实时事件流',createdAt: DateTime.now()));
-      }
+    _listenSessionEvents();
+    _messages.add(ChatMessage(
+        id: 'welcome',
+        role: ChatRole.system,
+        content: '这是一个离线可运行 Demo：SSE 负责回答流，WebSocket 负责实时事件流',
+        createdAt: DateTime.now()));
+  }
   final List<ChatMessage> _messages = [];
   final List<String> _replySteps = [];
   final List<SessionRealtimeEvent> _sessionEvents = [];
@@ -31,18 +36,25 @@ class AiChatController extends ChangeNotifier {
   StreamSubscription<ReplyStreamEvent>? _replySubscription;
   StreamSubscription<SessionRealtimeEvent>? _sessionSubscription;
 
-  bool _isGenerating = false;
+  ChatGenerationState _generationState = const IdleState();
   bool _isConnected = false;
   int _unreadCount = 0;
-  String? _currentAssistantMessageId;
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   List<String> get replySteps => List.unmodifiable(_replySteps);
-  List<SessionRealtimeEvent> get sessionEvents => List.unmodifiable(_sessionEvents);
+  List<SessionRealtimeEvent> get sessionEvents =>
+      List.unmodifiable(_sessionEvents);
 
-  bool get isGenerating => _isGenerating;
+  ChatGenerationState get generationState => _generationState;
+  bool get isGenerating => _generationState.isInFlight;
+  bool get canSend => _generationState.canSend;
+  bool get canStop => _generationState.canStop;
+  String get generationLabel => _generationState.label;
+
   bool get isConnected => _isConnected;
   int get unreadCount => _unreadCount;
+
+  String? get currentAssistantMessageId => _generationState.assistantMessageId;
 
   void _listenSessionEvents() {
     _sessionSubscription = observeSessionEventsUseCase().listen((event) {
@@ -67,52 +79,85 @@ class AiChatController extends ChangeNotifier {
   }
 
   Future<void> sendMessage(String input) async {
-   final text = input.trim();
-   if(text.isEmpty) {
-     return;
-   }
+    if (!canSend) {
+      return;
+    }
 
-   final userMessage = ChatMessage(id: 'user_${DateTime.now().microsecondsSinceEpoch}', role: ChatRole.user, content: text, createdAt: DateTime.now());
+    final text = input.trim();
+    if (text.isEmpty) {
+      return;
+    }
 
-   final asssistantMessageId = 'assistant_${DateTime.now().microsecondsSinceEpoch}';
+    final userMessage = ChatMessage(
+        id: 'user_${DateTime.now().microsecondsSinceEpoch}',
+        role: ChatRole.user,
+        content: text,
+        createdAt: DateTime.now());
 
-  final assistantPlaceholder = ChatMessage(id: asssistantMessageId, role: ChatRole.assistant, content: '', createdAt: DateTime.now());
+    final asssistantMessageId =
+        'assistant_${DateTime.now().microsecondsSinceEpoch}';
 
-  _messages.add(userMessage);
-  _messages.add(assistantPlaceholder);
-  _replySteps.clear();
-  _isGenerating = true;
-  _currentAssistantMessageId = asssistantMessageId;
-  notifyListeners();
-  await _replySubscription?.cancel();
-  _replySubscription = sendChatMessageUseCase(userInput:text, assistantMessageId: asssistantMessageId).listen(_handleReplyEvent);
-}
+    final assistantPlaceholder = ChatMessage(
+        id: asssistantMessageId,
+        role: ChatRole.assistant,
+        content: '',
+        createdAt: DateTime.now());
+
+    _messages.add(userMessage);
+    _messages.add(assistantPlaceholder);
+    _replySteps.clear();
+    _appendReplyStep('已提交问题，等待建立 SSE 连接');
+    _transitionTo(
+      PreparingState(
+        assistantMessageId: asssistantMessageId,
+        step: '已提交问题，等待建立 SSE 连接',
+      ),
+    );
+
+    notifyListeners();
+    await _replySubscription?.cancel();
+    _replySubscription = sendChatMessageUseCase(
+            userInput: text, assistantMessageId: asssistantMessageId)
+        .listen(_handleReplyEvent);
+  }
 
   void _handleReplyEvent(ReplyStreamEvent event) {
     debugPrint('[展示层/Controller] 收到回复流事件: ${event.runtimeType}');
 
     switch (event) {
-      case ReplyStarted():
-        _appendReplyStep('SSE 已建立连接，开始接收模型输出');
-      case ReplyStatus(:final text):
+      case ReplyStarted(:final messageId):
+       const step = 'SSE 已建立连接，开始接收模型输出';
+        _appendReplyStep(step);
+         _transitionTo(PreparingState(assistantMessageId: messageId, step: step));
+      case ReplyStatus(:final messageId,:final text):
         _appendReplyStep(text);
+         _transitionTo(PreparingState(assistantMessageId: messageId, step: text));
       case ReplyDelta(:final messageId, :final text):
         _appendDelta(messageId, text);
-      case ReplyFinished():
+        _transitionTo(
+          StreamingState(
+            assistantMessageId: messageId,
+            receivedChars: _messageLength(messageId),
+          ),
+        );
+      case ReplyFinished(:final messageId):
         _appendReplyStep('本次回答已完成');
-        _isGenerating = false;
-        _currentAssistantMessageId = null;
-      case ReplyFailed(:final error):
+         _transitionTo(CompletedState(assistantMessageId: messageId));
+      case ReplyCanceled(:final messageId, :final reason):
+        _appendReplyStep(reason);
+        _transitionTo(
+          CanceledState(assistantMessageId: messageId, reason: reason),
+        );
+      case ReplyFailed(:final messageId,:final error):
         _appendReplyStep('生成失败: $error');
-        _isGenerating = false;
-        _currentAssistantMessageId = null;
+        _transitionTo(FailedState(assistantMessageId: messageId, error: error));
     }
 
     notifyListeners();
   }
 
   void _appendReplyStep(String step) {
-    if(step.isEmpty) {
+    if (step.isEmpty) {
       return;
     }
     _replySteps.add(step);
@@ -123,7 +168,7 @@ class AiChatController extends ChangeNotifier {
 
   void _appendDelta(String messageId, String delta) {
     final index = _messages.indexWhere((element) => element.id == messageId);
-    if(index == -1) {
+    if (index == -1) {
       return;
     }
     final current = _messages[index];
@@ -131,11 +176,13 @@ class AiChatController extends ChangeNotifier {
   }
 
   Future<void> stopGenerating() async {
-    if(!_isGenerating || _currentAssistantMessageId == null) {
+     final assistantMessageId = currentAssistantMessageId;
+    if (!canStop || assistantMessageId == null) {
       return;
     }
-    await stopGenerationUseCase(_currentAssistantMessageId!);
-  }
+    _transitionTo(StoppingState(assistantMessageId: assistantMessageId));
+    notifyListeners();
+    await stopGenerationUseCase(assistantMessageId);  }
 
   @override
   void dispose() {
@@ -144,5 +191,16 @@ class AiChatController extends ChangeNotifier {
     disposeRepository();
     super.dispose();
   }
-}
 
+  int _messageLength(String messageId) {
+    final index = _messages.indexWhere((element) => element.id == messageId);
+    if (index == -1) {
+      return 0;
+    }
+    return _messages[index].content.length;
+  }
+
+   void _transitionTo(ChatGenerationState nextState) {
+    _generationState = nextState;
+  }
+}

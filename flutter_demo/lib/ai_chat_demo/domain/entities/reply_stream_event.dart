@@ -24,6 +24,12 @@ final class ReplyFinished extends ReplyStreamEvent {
   const ReplyFinished({required super.messageId});
 }
 
+final class ReplyCanceled extends ReplyStreamEvent {
+  const ReplyCanceled({required super.messageId, required this.reason});
+
+  final String reason;
+} 
+
 final class ReplyFailed extends ReplyStreamEvent {
   const ReplyFailed({required super.messageId, required this.error});
 

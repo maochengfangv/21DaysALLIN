@@ -25,8 +25,10 @@ class MockSseChatDataSource {
       for (final step in steps) {
 
         if (_shouldStop(assistantMessageId)) {
-          yield ReplyStatus(messageId: assistantMessageId, text: '用户已停止生成');
-          yield ReplyFinished(messageId: assistantMessageId); 
+          yield ReplyCanceled(
+            messageId: assistantMessageId,
+            reason: '用户已停止生成',
+          );
           return;
         }
 
@@ -37,8 +39,10 @@ class MockSseChatDataSource {
       final chunks = _splitAnswer(_buildMockAnswer(userInput));
       for (final chunk in chunks) {
         if(_shouldStop(assistantMessageId)) {
-          yield ReplyStatus(messageId: assistantMessageId, text: '用户已停止生成');
-          yield ReplyFinished(messageId: assistantMessageId); 
+          yield ReplyCanceled(
+            messageId: assistantMessageId,
+            reason: '用户已停止生成',
+          );
           return;
         }
         await Future.delayed(const Duration(milliseconds: 220));
