@@ -16,6 +16,18 @@ class AiChatInputBar extends StatelessWidget {
     required this.onStop,
   });
 
+  void _showDevelopingToast(BuildContext context, String featureName) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('$featureName 开发中....'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -34,6 +46,22 @@ class AiChatInputBar extends StatelessWidget {
                 border: OutlineInputBorder(),
               ),
               onSubmitted: (_) => onSend(),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _showDevelopingToast(context, '打开相册'),
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('相册'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _showDevelopingToast(context, '语音输入'),
+                  icon: const Icon(Icons.mic_none_outlined),
+                  label: const Text('语音'),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             FilledButton(
