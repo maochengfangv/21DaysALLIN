@@ -22,29 +22,25 @@ class AiChatInputBar extends StatelessWidget {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: TextField(
-                controller: inputController,
-                minLines: 1,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: '输入一个问题，比如：SSE 和 WebSocket 怎么分工？',
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (_) => onSend(),
+            TextField(
+              controller: inputController,
+              minLines: 1,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                hintText: '输入一个问题，比如：SSE 和 WebSocket 怎么分工？',
+                border: OutlineInputBorder(),
               ),
+              onSubmitted: (_) => onSend(),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(height: 8),
             FilledButton(
-              onPressed: canSend ? onSend : null,
-              child: const Text('发送'),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonal(
-              onPressed: canStop ? onStop : null,
-              child: const Text('停止'),
+              onPressed: canStop
+                  ? onStop
+                  : (canSend ? onSend : null),
+              child: Text(canStop ? '停止' : '发送'),
             ),
           ],
         ),
