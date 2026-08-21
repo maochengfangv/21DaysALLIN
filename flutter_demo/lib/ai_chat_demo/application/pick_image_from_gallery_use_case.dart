@@ -1,3 +1,5 @@
+import 'package:flutter_demo/ai_chat_demo/domain/entities/selected_image_attachment.dart';
+
 import '../domain/repositories/media_picker_repository.dart';
 
 class PickImageFromGalleryUseCase {
@@ -5,7 +7,7 @@ class PickImageFromGalleryUseCase {
 
   PickImageFromGalleryUseCase(this.mediaPickerRepository);
 
-  Future<String?> call() async {
-    return await mediaPickerRepository.pickImageFromGallery();
+  Future<List<SelectedImageAttachment>> call() async {
+    return await mediaPickerRepository.pickImagesFromGallery();
   }
 }

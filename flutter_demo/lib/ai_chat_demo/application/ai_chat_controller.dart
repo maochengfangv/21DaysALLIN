@@ -4,6 +4,7 @@ import 'package:flutter_demo/ai_chat_demo/application/observe_session_events_use
 import 'package:flutter_demo/ai_chat_demo/application/send_chat_message_use_case.dart';
 import 'package:flutter_demo/ai_chat_demo/application/stop_generation_use_case.dart';
 import 'package:flutter_demo/ai_chat_demo/application/pick_image_from_gallery_use_case.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/entities/selected_image_attachment.dart';
 import 'chat_generation_state.dart';
 
 import '../domain/entities/chat_message.dart';
@@ -35,6 +36,7 @@ class AiChatController extends ChangeNotifier {
   final List<ChatMessage> _messages = [];
   final List<String> _replySteps = [];
   final List<SessionRealtimeEvent> _sessionEvents = [];
+  final List<SelectedImageAttachment> _selectedImages = [];
 
   StreamSubscription<ReplyStreamEvent>? _replySubscription;
   StreamSubscription<SessionRealtimeEvent>? _sessionSubscription;
@@ -47,6 +49,8 @@ class AiChatController extends ChangeNotifier {
   List<String> get replySteps => List.unmodifiable(_replySteps);
   List<SessionRealtimeEvent> get sessionEvents =>
       List.unmodifiable(_sessionEvents);
+
+  List<SelectedImageAttachment> get selectedImages => List.unmodifiable(_selectedImages);
 
   ChatGenerationState get generationState => _generationState;
   bool get isGenerating => _generationState.isInFlight;
@@ -202,12 +206,21 @@ class AiChatController extends ChangeNotifier {
   }
 
   Future<void> pickImageFromGallery() async {
-   final imagePath =  await pickImageFromGalleryUseCase();
-   if (imagePath == null) {
+   final images =  await pickImageFromGalleryUseCase();
+   if (images.isEmpty) {
     return;
    }
+
   //  _messages.add(ChatMessage(id: 'system_image_${DateTime.now().microsecondsSinceEpoch}', role: ChatRole.system, content: '已选择图片：$imagePath', createdAt: DateTime.now()));
   //  notifyListeners();
+
+  final existingPaths = _selectedImages.map((e) => e.localPath).toSet();
+  for (final image in images) {
+      if(!existingPaths.contains(image.localPath)) {
+        _selectedImages.add(image);
+      }
+  }
+  notifyListeners();
   }
 
   @override

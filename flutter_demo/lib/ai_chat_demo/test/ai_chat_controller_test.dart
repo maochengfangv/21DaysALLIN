@@ -8,6 +8,7 @@ import 'package:flutter_demo/ai_chat_demo/application/send_chat_message_use_case
 import 'package:flutter_demo/ai_chat_demo/application/stop_generation_use_case.dart';
 import 'package:flutter_demo/ai_chat_demo/domain/entities/chat_message.dart';
 import 'package:flutter_demo/ai_chat_demo/domain/entities/reply_stream_event.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/entities/selected_image_attachment.dart';
 import 'package:flutter_demo/ai_chat_demo/domain/entities/session_realtime_event.dart';
 import 'package:flutter_demo/ai_chat_demo/domain/repositories/ai_chat_repository.dart';
 import 'package:flutter_demo/ai_chat_demo/domain/repositories/media_picker_repository.dart';
@@ -193,11 +194,11 @@ void main() {
 }
 
 class _FakeMediaPickerRepository implements MediaPickerRepository {
-  String? nextImagePath;
+  List<SelectedImageAttachment> nextImages = const [];
 
   @override
-  Future<String?> pickImageFromGallery() async {
-    return nextImagePath;
+  Future<List<SelectedImageAttachment>> pickImagesFromGallery() async {
+    return nextImages;
   }
 }
 

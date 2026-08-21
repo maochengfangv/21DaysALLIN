@@ -128,6 +128,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
               const Divider(height: 1),
               AiChatInputBar(
                 inputController: _inputController,
+                selectedImages: controller.selectedImages,
                 canSend: controller.canSend,
                 canStop: controller.canStop,
                 onSend: _handleSend,

@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
+import '../../domain/entities/selected_image_attachment.dart';
 import 'ai_chat_album_button.dart';
 
 class AiChatInputBar extends StatelessWidget {
   final TextEditingController inputController;
+  final List<SelectedImageAttachment> selectedImages;
   final bool canSend;
   final bool canStop;
   final Future<void> Function() onSend;
@@ -13,6 +17,7 @@ class AiChatInputBar extends StatelessWidget {
   const AiChatInputBar({
     super.key,
     required this.inputController,
+    required this.selectedImages,
     required this.canSend,
     required this.canStop,
     required this.onSend,
@@ -41,6 +46,31 @@ class AiChatInputBar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (selectedImages.isNotEmpty) ...[
+              SizedBox(
+                height: 72,
+                child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final image in selectedImages)
+                          Container(
+                              width: 72,
+                              height: 72,
+                              margin: const EdgeInsets.only(right: 8),
+                              clipBehavior: Clip.antiAlias,
+                              decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.grey.shade200),
+                              child: Image.file(
+                                File(image.localPath),
+                                fit: BoxFit.cover,
+                              ))
+                      ],
+                    )),
+              ),
+              const SizedBox(height: 8,),
+            ],
             TextField(
               controller: inputController,
               minLines: 1,
@@ -67,9 +97,7 @@ class AiChatInputBar extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             FilledButton(
-              onPressed: canStop
-                  ? onStop
-                  : (canSend ? onSend : null),
+              onPressed: canStop ? onStop : (canSend ? onSend : null),
               child: Text(canStop ? '停止' : '发送'),
             ),
           ],
