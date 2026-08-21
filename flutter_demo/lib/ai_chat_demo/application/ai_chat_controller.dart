@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_demo/ai_chat_demo/application/observe_session_events_use_case.dart';
 import 'package:flutter_demo/ai_chat_demo/application/send_chat_message_use_case.dart';
 import 'package:flutter_demo/ai_chat_demo/application/stop_generation_use_case.dart';
-
+import 'package:flutter_demo/ai_chat_demo/application/pick_image_from_gallery_use_case.dart';
 import 'chat_generation_state.dart';
 
 import '../domain/entities/chat_message.dart';
@@ -15,12 +15,14 @@ class AiChatController extends ChangeNotifier {
   final SendChatMessageUseCase sendChatMessageUseCase;
   final StopGenerationUseCase stopGenerationUseCase;
   final ObserveSessionEventsUseCase observeSessionEventsUseCase;
+  final PickImageFromGalleryUseCase pickImageFromGalleryUseCase;
   final VoidCallback disposeRepository;
 
   AiChatController({
     required this.sendChatMessageUseCase,
     required this.stopGenerationUseCase,
     required this.observeSessionEventsUseCase,
+    required this.pickImageFromGalleryUseCase,
     required this.disposeRepository,
   }) {
     _listenSessionEvents();
@@ -133,11 +135,13 @@ class AiChatController extends ChangeNotifier {
         _appendReplyStep(step);
         _updateMessageContentFormat(messageId, contentFormat);
         _updateMessageStatus(messageId, ChatMessageStatus.streaming);
-        _transitionTo(PreparingState(assistantMessageId: messageId, step: step));
+        _transitionTo(
+            PreparingState(assistantMessageId: messageId, step: step));
       case ReplyStatus(:final messageId, :final text):
         _appendReplyStep(text);
         _updateMessageStatus(messageId, ChatMessageStatus.streaming);
-        _transitionTo(PreparingState(assistantMessageId: messageId, step: text));
+        _transitionTo(
+            PreparingState(assistantMessageId: messageId, step: text));
       case ReplyDelta(:final messageId, :final text):
         _appendDelta(messageId, text);
         _updateMessageStatus(messageId, ChatMessageStatus.streaming);
@@ -153,13 +157,15 @@ class AiChatController extends ChangeNotifier {
         _transitionTo(CompletedState(assistantMessageId: messageId));
       case ReplyCanceled(:final messageId, :final reason):
         _appendReplyStep(reason);
-        _updateMessageStatus(messageId, ChatMessageStatus.canceled, errorMessage: reason);
+        _updateMessageStatus(messageId, ChatMessageStatus.canceled,
+            errorMessage: reason);
         _transitionTo(
           CanceledState(assistantMessageId: messageId, reason: reason),
         );
       case ReplyFailed(:final messageId, :final error):
         _appendReplyStep('生成失败: $error');
-        _updateMessageStatus(messageId, ChatMessageStatus.failed, errorMessage: error);
+        _updateMessageStatus(messageId, ChatMessageStatus.failed,
+            errorMessage: error);
         _transitionTo(FailedState(assistantMessageId: messageId, error: error));
     }
 
@@ -186,13 +192,23 @@ class AiChatController extends ChangeNotifier {
   }
 
   Future<void> stopGenerating() async {
-     final assistantMessageId = currentAssistantMessageId;
+    final assistantMessageId = currentAssistantMessageId;
     if (!canStop || assistantMessageId == null) {
       return;
     }
     _transitionTo(StoppingState(assistantMessageId: assistantMessageId));
     notifyListeners();
-    await stopGenerationUseCase(assistantMessageId);  }
+    await stopGenerationUseCase(assistantMessageId);
+  }
+
+  Future<void> pickImageFromGallery() async {
+   final imagePath =  await pickImageFromGalleryUseCase();
+   if (imagePath == null) {
+    return;
+   }
+  //  _messages.add(ChatMessage(id: 'system_image_${DateTime.now().microsecondsSinceEpoch}', role: ChatRole.system, content: '已选择图片：$imagePath', createdAt: DateTime.now()));
+  //  notifyListeners();
+  }
 
   @override
   void dispose() {

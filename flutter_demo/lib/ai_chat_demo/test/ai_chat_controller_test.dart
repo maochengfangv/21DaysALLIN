@@ -10,18 +10,24 @@ import 'package:flutter_demo/ai_chat_demo/domain/entities/chat_message.dart';
 import 'package:flutter_demo/ai_chat_demo/domain/entities/reply_stream_event.dart';
 import 'package:flutter_demo/ai_chat_demo/domain/entities/session_realtime_event.dart';
 import 'package:flutter_demo/ai_chat_demo/domain/repositories/ai_chat_repository.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/repositories/media_picker_repository.dart';
+
+import '../application/pick_image_from_gallery_use_case.dart';
 
 void main() {
   group('AiChatController', () {
     late _FakeAiChatRepository repository;
+    late _FakeMediaPickerRepository mediaPickerRepository;
     late AiChatController controller;
 
     setUp(() {
       repository = _FakeAiChatRepository();
+      mediaPickerRepository = _FakeMediaPickerRepository();
       controller = AiChatController(
         sendChatMessageUseCase: SendChatMessageUseCase(repository),
         stopGenerationUseCase: StopGenerationUseCase(repository),
         observeSessionEventsUseCase: ObserveSessionEventsUseCase(repository),
+        pickImageFromGalleryUseCase: PickImageFromGalleryUseCase(mediaPickerRepository),
         disposeRepository: repository.dispose,
       );
     });
@@ -184,6 +190,15 @@ void main() {
       expect(canceledMessage.content, '我正在生成前半段');
     });
   });
+}
+
+class _FakeMediaPickerRepository implements MediaPickerRepository {
+  String? nextImagePath;
+
+  @override
+  Future<String?> pickImageFromGallery() async {
+    return nextImagePath;
+  }
 }
 
 class _FakeAiChatRepository implements AiChatRepository {

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import 'ai_chat_album_button.dart';
+
 class AiChatInputBar extends StatelessWidget {
   final TextEditingController inputController;
   final bool canSend;
   final bool canStop;
   final Future<void> Function() onSend;
   final VoidCallback onStop;
+  final Future<void> Function() onPickAlbum;
 
   const AiChatInputBar({
     super.key,
@@ -14,6 +17,7 @@ class AiChatInputBar extends StatelessWidget {
     required this.canStop,
     required this.onSend,
     required this.onStop,
+    required this.onPickAlbum,
   });
 
   void _showDevelopingToast(BuildContext context, String featureName) {
@@ -50,10 +54,8 @@ class AiChatInputBar extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                OutlinedButton.icon(
-                  onPressed: () => _showDevelopingToast(context, '打开相册'),
-                  icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('相册'),
+                AiChatAlbumButton(
+                  onPressed: onPickAlbum,
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton.icon(

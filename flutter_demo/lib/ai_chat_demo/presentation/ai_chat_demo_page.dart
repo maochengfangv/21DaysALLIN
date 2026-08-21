@@ -97,15 +97,15 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
                       : Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            AiChatTopPanel(
-                              isConnected: controller.isConnected,
-                              unreadCount: controller.unreadCount,
-                              generationLabel: controller.generationLabel,
-                              latestSteps: latestSteps,
-                              latestEvents: latestEvents
-                                  .map((e) => e.description)
-                                  .toList(),
-                            ),
+                            // AiChatTopPanel(
+                            //   isConnected: controller.isConnected,
+                            //   unreadCount: controller.unreadCount,
+                            //   generationLabel: controller.generationLabel,
+                            //   latestSteps: latestSteps,
+                            //   latestEvents: latestEvents
+                            //       .map((e) => e.description)
+                            //       .toList(),
+                            // ),
                             const Divider(height: 1),
                           ],
                         ),
@@ -132,6 +132,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
                 canStop: controller.canStop,
                 onSend: _handleSend,
                 onStop: controller.stopGenerating,
+                onPickAlbum: controller.pickImageFromGallery,
               ),
             ],
           ),
