@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../application/ai_chat_controller.dart';
+import '../application/presentation_support/input_bar_change_notifier.dart';
+import '../application/presentation_support/message_list_change_notifier_test.dart';
 import 'widgets/ai_chat_input_bar.dart';
 import 'widgets/ai_chat_message_bubble.dart';
 import 'widgets/ai_chat_voice_input_sheet.dart';
@@ -21,14 +23,14 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
   bool _lastKeyboardVisible = false;
 
   // ===== 🔴 Bug2修复：细粒度 Notifier 在 initState 创建，dispose 销毁 =====
-  late final _MessageListChangeNotifier _messageNotifier;
-  late final _InputBarChangeNotifier _inputNotifier;
+  late final MessageListChangeNotifier _messageNotifier;
+  late final InputBarChangeNotifier _inputNotifier;
 
   @override
   void initState() {
     super.initState();
-    _messageNotifier = _MessageListChangeNotifier(widget.controller);
-    _inputNotifier = _InputBarChangeNotifier(widget.controller);
+    _messageNotifier = MessageListChangeNotifier(widget.controller);
+    _inputNotifier = InputBarChangeNotifier(widget.controller);
   }
 
   @override
@@ -150,7 +152,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
             // ========== P0-2 修复1：消息列表只监听 messages 变化 ==========
             Expanded(
               child: AnimatedBuilder(
-                animation: _messageNotifier,  // 🔴 Bug2修复：复用 initState 创建的实例
+                animation: _messageNotifier, // 🔴 Bug2修复：复用 initState 创建的实例
                 builder: (context, _) {
                   final controller = widget.controller;
                   final isKeyboardVisible =
@@ -184,7 +186,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
             const Divider(height: 1),
             // ========== P0-2 修复2：输入栏只监听输入相关变化 ==========
             AnimatedBuilder(
-              animation: _inputNotifier,  // 🔴 Bug2修复：复用 initState 创建的实例
+              animation: _inputNotifier, // 🔴 Bug2修复：复用 initState 创建的实例
               builder: (context, _) {
                 final controller = widget.controller;
                 return AiChatInputBar(
@@ -203,8 +205,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
                     );
                     await controller.pickImageFromGallery();
                     final afterCount = controller.selectedImages.length;
-                    final cost =
-                        DateTime.now().millisecondsSinceEpoch - tPage;
+                    final cost = DateTime.now().millisecondsSinceEpoch - tPage;
                     debugPrint(
                       '[Check-images-bug][②AiChatDemoPage] controller.pickImageFromGallery 返回，耗时=${cost}ms，selectedImages 数量=$beforeCount→$afterCount',
                     );
@@ -217,86 +218,5 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
         ),
       ),
     );
-  }
-}
-
-/// ============================================================
-/// P0-2 修复辅助类：细粒度 Listenable 筛选，避免跨域 notify 全量重建
-/// 不引入 Provider/Riverpod，Dart SDK 内建即可实现 select() 语义
-/// ============================================================
-/// 只在「消息列表相关」变化时触发：messages / replySteps / generationState
-class _MessageListChangeNotifier extends ChangeNotifier {
-  _MessageListChangeNotifier(this._source) {
-    _source.addListener(_onChange);
-  }
-  final AiChatController _source;
-
-  int _lastMessagesLen = -1;
-  int _lastStepsLen = -1;
-  String _lastGenRuntimeType = '';
-
-  void _onChange() {
-    final mLen = _source.messages.length;
-    final sLen = _source.replySteps.length;
-    final gType = _source.generationState.runtimeType.toString();
-    if (mLen != _lastMessagesLen ||
-        sLen != _lastStepsLen ||
-        gType != _lastGenRuntimeType) {
-      _lastMessagesLen = mLen;
-      _lastStepsLen = sLen;
-      _lastGenRuntimeType = gType;
-      notifyListeners();
-    }
-  }
-
-  @override
-  void dispose() {
-    _source.removeListener(_onChange);
-    super.dispose();
-  }
-}
-
-/// 只在「输入栏相关」变化时触发：selectedImages / canSend/canStop / 语音状态
-/// ⚠️ 关键点：sessionEvents / isConnected / unreadCount 变化不会触发这里！
-class _InputBarChangeNotifier extends ChangeNotifier {
-  _InputBarChangeNotifier(this._source) {
-    _source.addListener(_onChange);
-  }
-  final AiChatController _source;
-
-  int _lastImagesLen = -1;
-  bool _lastCanSend = false;
-  bool _lastCanStop = false;
-  bool _lastVoiceListening = false;
-  String _lastVoiceText = '';
-  String _lastVoiceError = '';
-
-  void _onChange() {
-    final iLen = _source.selectedImages.length;
-    final cs = _source.canSend;
-    final csp = _source.canStop;
-    final vl = _source.isVoiceListening;
-    final vt = _source.voiceRecognizedText;
-    final ve = _source.voiceInputError ?? '';
-    if (iLen != _lastImagesLen ||
-        cs != _lastCanSend ||
-        csp != _lastCanStop ||
-        vl != _lastVoiceListening ||
-        vt != _lastVoiceText ||
-        ve != _lastVoiceError) {
-      _lastImagesLen = iLen;
-      _lastCanSend = cs;
-      _lastCanStop = csp;
-      _lastVoiceListening = vl;
-      _lastVoiceText = vt;
-      _lastVoiceError = ve;
-      notifyListeners();
-    }
-  }
-
-  @override
-  void dispose() {
-    _source.removeListener(_onChange);
-    super.dispose();
   }
 }
