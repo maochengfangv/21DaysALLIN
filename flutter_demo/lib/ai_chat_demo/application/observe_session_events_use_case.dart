@@ -4,7 +4,6 @@ import '../domain/entities/session_realtime_event.dart';
 import '../domain/repositories/ai_chat_repository.dart';
 
 class ObserveSessionEventsUseCase {
-
   ObserveSessionEventsUseCase(this.repository);
   final AiChatRepository repository;
 

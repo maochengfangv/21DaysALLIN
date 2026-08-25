@@ -1,356 +1,138 @@
-import 'dart:async';
-
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 
 import '../domain/entities/chat_message.dart';
-import '../domain/entities/message_content_format.dart';
-import '../domain/entities/reply_stream_event.dart';
 import '../domain/entities/selected_image_attachment.dart';
 import '../domain/entities/session_realtime_event.dart';
-import '../domain/entities/voice_input_result.dart';
+import '../domain/repositories/ai_chat_repository.dart';
+import '../domain/repositories/media_picker_repository.dart';
+import '../domain/repositories/voice_input_repository.dart';
+import 'ai_chat_coordinator.dart';
+import 'attachment_controller.dart';
 import 'cancel_voice_input_use_case.dart';
 import 'chat_generation_state.dart';
+import 'message_controller.dart';
 import 'observe_session_events_use_case.dart';
 import 'pick_image_from_gallery_use_case.dart';
 import 'send_chat_message_use_case.dart';
+import 'session_event_controller.dart';
 import 'start_voice_input_use_case.dart';
 import 'stop_generation_use_case.dart';
+import 'voice_input_controller.dart';
 
+/// ============================================================
+/// 【兼容层】保持原接口签名不变，UI层零迁移成本
+/// 内部委托给 AiChatCoordinator 及其 4 个子 Controller
+///
+/// ⚠️  Deprecated Warning：
+///     新代码请直接使用 AiChatCoordinator，本类仅作过渡
+///     可在一个迭代后通过全局查找替换移除
+/// ============================================================
+@Deprecated('请使用 AiChatCoordinator 替代，详见架构拆分文档')
 class AiChatController extends ChangeNotifier {
-  AiChatController({
-    required this.sendChatMessageUseCase,
-    required this.stopGenerationUseCase,
-    required this.observeSessionEventsUseCase,
-    required this.pickImageFromGalleryUseCase,
-    required this.startVoiceInputUseCase,
-    required this.cancelVoiceInputUseCase,
-    required this.disposeRepository,
+  // ============================================================
+  // 【便捷工厂】基于 Repository 直接构造（DI容器中常用）
+  // ============================================================
+  factory AiChatController.fromRepositories({
+    required AiChatRepository chatRepository,
+    required MediaPickerRepository mediaPickerRepository,
+    required VoiceInputRepository voiceInputRepository,
+    required VoidCallback disposeRepository,
   }) {
-    _listenSessionEvents();
-    _messages.add(
-      ChatMessage(
-        id: 'welcome',
-        role: ChatRole.system,
-        content: '这是一个离线可运行 Demo：SSE 负责回答流，WebSocket 负责实时事件流',
-        createdAt: DateTime.now(),
-      ),
+    return AiChatController(
+      sendChatMessageUseCase: SendChatMessageUseCase(chatRepository),
+      stopGenerationUseCase: StopGenerationUseCase(chatRepository),
+      observeSessionEventsUseCase: ObserveSessionEventsUseCase(chatRepository),
+      pickImageFromGalleryUseCase:
+          PickImageFromGalleryUseCase(mediaPickerRepository),
+      startVoiceInputUseCase: StartVoiceInputUseCase(voiceInputRepository),
+      cancelVoiceInputUseCase: CancelVoiceInputUseCase(voiceInputRepository),
+      disposeRepository: disposeRepository,
     );
   }
+  AiChatController({
+    required SendChatMessageUseCase sendChatMessageUseCase,
+    required StopGenerationUseCase stopGenerationUseCase,
+    required ObserveSessionEventsUseCase observeSessionEventsUseCase,
+    required PickImageFromGalleryUseCase pickImageFromGalleryUseCase,
+    required StartVoiceInputUseCase startVoiceInputUseCase,
+    required CancelVoiceInputUseCase cancelVoiceInputUseCase,
+    required VoidCallback disposeRepository,
+  }) : this._withCoordinator(
+          coordinator: AiChatCoordinator(
+            messageController: MessageController(
+              sendChatMessageUseCase: sendChatMessageUseCase,
+              stopGenerationUseCase: stopGenerationUseCase,
+            ),
+            voiceInputController: VoiceInputController(
+              startVoiceInputUseCase: startVoiceInputUseCase,
+              cancelVoiceInputUseCase: cancelVoiceInputUseCase,
+            ),
+            attachmentController: AttachmentController(
+              pickImageFromGalleryUseCase: pickImageFromGalleryUseCase,
+            ),
+            sessionEventController: SessionEventController(
+              observeSessionEventsUseCase: observeSessionEventsUseCase,
+            ),
+          ),
+          disposeRepository: disposeRepository,
+        );
 
-  final SendChatMessageUseCase sendChatMessageUseCase;
-  final StopGenerationUseCase stopGenerationUseCase;
-  final ObserveSessionEventsUseCase observeSessionEventsUseCase;
-  final PickImageFromGalleryUseCase pickImageFromGalleryUseCase;
-  final StartVoiceInputUseCase startVoiceInputUseCase;
-  final CancelVoiceInputUseCase cancelVoiceInputUseCase;
+  /// 推荐直接注入Coordinator的构造函数（新代码路径）
+  AiChatController._withCoordinator({
+    required AiChatCoordinator coordinator,
+    required this.disposeRepository,
+  }) : _coordinator = coordinator {
+    _coordinator.addListener(_forwardNotifications);
+  }
+
+  final AiChatCoordinator _coordinator;
   final VoidCallback disposeRepository;
 
-  final List<ChatMessage> _messages = [];
-  final List<String> _replySteps = [];
-  final List<SessionRealtimeEvent> _sessionEvents = [];
-  final List<SelectedImageAttachment> _selectedImages = [];
+  // ===== 监听转发：保持UI层notifyListeners行为一致 =====
+  void _forwardNotifications() => notifyListeners();
 
-  StreamSubscription<ReplyStreamEvent>? _replySubscription;
-  StreamSubscription<SessionRealtimeEvent>? _sessionSubscription;
-  StreamSubscription<VoiceInputResult>? _voiceInputSubscription;
-
-  ChatGenerationState _generationState = const IdleState();
-  bool _isConnected = false;
-  int _unreadCount = 0;
-  bool _isVoiceListening = false;
-  String _voiceRecognizedText = '';
-  String? _voiceInputError;
-
-  List<ChatMessage> get messages => List.unmodifiable(_messages);
-  List<String> get replySteps => List.unmodifiable(_replySteps);
-  List<SessionRealtimeEvent> get sessionEvents =>
-      List.unmodifiable(_sessionEvents);
-  List<SelectedImageAttachment> get selectedImages =>
-      List.unmodifiable(_selectedImages);
-
-  ChatGenerationState get generationState => _generationState;
-  bool get isGenerating => _generationState.isInFlight;
-  bool get canSend => _generationState.canSend;
-  bool get canStop => _generationState.canStop;
-  String get generationLabel => _generationState.label;
-
-  bool get isConnected => _isConnected;
-  int get unreadCount => _unreadCount;
-  bool get isVoiceListening => _isVoiceListening;
-  String get voiceRecognizedText => _voiceRecognizedText;
-  String? get voiceInputError => _voiceInputError;
+  // ===== 全部转发至 Coordinator =====
+  List<ChatMessage> get messages => _coordinator.messages;
+  List<String> get replySteps => _coordinator.replySteps;
+  ChatGenerationState get generationState => _coordinator.generationState;
+  bool get isGenerating => _coordinator.isGenerating;
+  bool get canSend => _coordinator.canSend;
+  bool get canStop => _coordinator.canStop;
+  String get generationLabel => _coordinator.generationLabel;
+  String? get currentAssistantMessageId =>
+      _coordinator.currentAssistantMessageId;
+  bool get isConnected => _coordinator.isConnected;
+  int get unreadCount => _coordinator.unreadCount;
+  bool get isVoiceListening => _coordinator.isVoiceListening;
+  String get voiceRecognizedText => _coordinator.voiceRecognizedText;
+  String? get voiceInputError => _coordinator.voiceInputError;
   bool get canSendVoiceRecognizedText =>
-      !_isVoiceListening && _voiceRecognizedText.trim().isNotEmpty;
+      _coordinator.canSendVoiceRecognizedText;
+  List<SelectedImageAttachment> get selectedImages =>
+      _coordinator.selectedImages;
+  List<SessionRealtimeEvent> get sessionEvents => _coordinator.sessionEvents;
 
-  String? get currentAssistantMessageId => _generationState.assistantMessageId;
+  Future<void> sendMessage(String input) =>
+      _coordinator.sendMessageWithAttachments(input);
 
-  void _listenSessionEvents() {
-    _sessionSubscription = observeSessionEventsUseCase().listen((event) {
-      debugPrint('[展示层/Controller] 收到实时事件: ${event.description}');
+  Future<void> stopGenerating() => _coordinator.stopGenerating();
 
-      switch (event) {
-        case ConnectionStateChangedEvent(:final connected):
-          _isConnected = connected;
-        case UnreadChangedEvent(:final unreadCount):
-          _unreadCount = unreadCount;
-        case SessionUpdatedEvent():
-        case SystemHintEvent():
-          break;
-      }
+  Future<void> pickImageFromGallery() => _coordinator.pickImageFromGallery();
 
-      _sessionEvents.add(event);
-      if (_sessionEvents.length > 6) {
-        _sessionEvents.removeAt(0);
-      }
-      notifyListeners();
-    });
-  }
+  Future<void> startVoiceInput() => _coordinator.startVoiceInput();
 
-  Future<void> sendMessage(String input) async {
-    if (!canSend) {
-      return;
-    }
+  Future<void> cancelVoiceInput() => _coordinator.cancelVoiceInput();
 
-    final text = input.trim();
-    if (text.isEmpty) {
-      return;
-    }
+  String consumeVoiceRecognizedText() =>
+      _coordinator.consumeVoiceRecognizedText();
 
-    final userMessage = ChatMessage(
-      id: 'user_${DateTime.now().microsecondsSinceEpoch}',
-      role: ChatRole.user,
-      content: text,
-      createdAt: DateTime.now(),
-    );
-
-    final asssistantMessageId =
-        'assistant_${DateTime.now().microsecondsSinceEpoch}';
-
-    final assistantPlaceholder = ChatMessage(
-      id: asssistantMessageId,
-      role: ChatRole.assistant,
-      content: '',
-      createdAt: DateTime.now(),
-      status: ChatMessageStatus.pending,
-    );
-
-    _messages.add(userMessage);
-    _messages.add(assistantPlaceholder);
-    _replySteps.clear();
-    _appendReplyStep('已提交问题，等待建立 SSE 连接');
-    _transitionTo(
-      PreparingState(
-        assistantMessageId: asssistantMessageId,
-        step: '已提交问题，等待建立 SSE 连接',
-      ),
-    );
-
-    notifyListeners();
-    await _replySubscription?.cancel();
-    _replySubscription = sendChatMessageUseCase(
-      userInput: text,
-      assistantMessageId: asssistantMessageId,
-    ).listen(_handleReplyEvent);
-  }
-
-  void _handleReplyEvent(ReplyStreamEvent event) {
-    debugPrint('[展示层/Controller] 收到回复流事件: ${event.runtimeType}');
-
-    switch (event) {
-      case ReplyStarted(:final messageId, :final contentFormat):
-        const step = 'SSE 已建立连接，开始接收模型输出';
-        _appendReplyStep(step);
-        _updateMessageContentFormat(messageId, contentFormat);
-        _updateMessageStatus(messageId, ChatMessageStatus.streaming);
-        _transitionTo(
-          PreparingState(assistantMessageId: messageId, step: step),
-        );
-      case ReplyStatus(:final messageId, :final text):
-        _appendReplyStep(text);
-        _updateMessageStatus(messageId, ChatMessageStatus.streaming);
-        _transitionTo(
-          PreparingState(assistantMessageId: messageId, step: text),
-        );
-      case ReplyDelta(:final messageId, :final text):
-        _appendDelta(messageId, text);
-        _updateMessageStatus(messageId, ChatMessageStatus.streaming);
-        _transitionTo(
-          StreamingState(
-            assistantMessageId: messageId,
-            receivedChars: _messageLength(messageId),
-          ),
-        );
-      case ReplyFinished(:final messageId):
-        _appendReplyStep('本次回答已完成');
-        _updateMessageStatus(messageId, ChatMessageStatus.completed);
-        _transitionTo(CompletedState(assistantMessageId: messageId));
-      case ReplyCanceled(:final messageId, :final reason):
-        _appendReplyStep(reason);
-        _updateMessageStatus(
-          messageId,
-          ChatMessageStatus.canceled,
-          errorMessage: reason,
-        );
-        _transitionTo(
-          CanceledState(assistantMessageId: messageId, reason: reason),
-        );
-      case ReplyFailed(:final messageId, :final error):
-        _appendReplyStep('生成失败: $error');
-        _updateMessageStatus(
-          messageId,
-          ChatMessageStatus.failed,
-          errorMessage: error,
-        );
-        _transitionTo(FailedState(assistantMessageId: messageId, error: error));
-    }
-
-    notifyListeners();
-  }
-
-  void _appendReplyStep(String step) {
-    if (step.isEmpty) {
-      return;
-    }
-    _replySteps.add(step);
-    if (_replySteps.length > 8) {
-      _replySteps.removeAt(0);
-    }
-  }
-
-  void _appendDelta(String messageId, String delta) {
-    final index = _messages.indexWhere((element) => element.id == messageId);
-    if (index == -1) {
-      return;
-    }
-    final current = _messages[index];
-    _messages[index] = current.copyWith(content: current.content + delta);
-  }
-
-  Future<void> stopGenerating() async {
-    final assistantMessageId = currentAssistantMessageId;
-    if (!canStop || assistantMessageId == null) {
-      return;
-    }
-    _transitionTo(StoppingState(assistantMessageId: assistantMessageId));
-    notifyListeners();
-    await stopGenerationUseCase(assistantMessageId);
-  }
-
-  Future<void> pickImageFromGallery() async {
-    final images = await pickImageFromGalleryUseCase();
-    if (images.isEmpty) {
-      return;
-    }
-
-    final existingPaths = _selectedImages.map((e) => e.localPath).toSet();
-    for (final image in images) {
-      if (!existingPaths.contains(image.localPath)) {
-        _selectedImages.add(image);
-      }
-    }
-    notifyListeners();
-  }
-
-  Future<void> startVoiceInput() async {
-    await _voiceInputSubscription?.cancel();
-    _voiceRecognizedText = '';
-    _voiceInputError = null;
-    _isVoiceListening = true;
-    notifyListeners();
-
-    try {
-      final stream = await startVoiceInputUseCase();
-      _voiceInputSubscription = stream.listen(
-        (result) {
-          _voiceRecognizedText = result.text;
-          _isVoiceListening = !result.isFinal;
-          notifyListeners();
-        },
-        onError: (Object error) {
-          _voiceInputError = '语音识别失败：$error';
-          _isVoiceListening = false;
-          notifyListeners();
-        },
-      );
-    } catch (error) {
-      _voiceInputError = '语音识别启动失败：$error';
-      _isVoiceListening = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> cancelVoiceInput() async {
-    await _voiceInputSubscription?.cancel();
-    _voiceInputSubscription = null;
-    await cancelVoiceInputUseCase();
-    _voiceRecognizedText = '';
-    _voiceInputError = null;
-    _isVoiceListening = false;
-    notifyListeners();
-  }
-
-  String consumeVoiceRecognizedText() {
-    final text = _voiceRecognizedText.trim();
-    _voiceRecognizedText = '';
-    _voiceInputError = null;
-    _isVoiceListening = false;
-    notifyListeners();
-    return text;
-  }
-
-  void resetVoiceInput() {
-    _voiceRecognizedText = '';
-    _voiceInputError = null;
-    _isVoiceListening = false;
-    notifyListeners();
-  }
+  void resetVoiceInput() => _coordinator.resetVoiceInput();
 
   @override
   void dispose() {
-    _replySubscription?.cancel();
-    _sessionSubscription?.cancel();
-    _voiceInputSubscription?.cancel();
+    _coordinator.removeListener(_forwardNotifications);
+    _coordinator.dispose();
     disposeRepository();
     super.dispose();
-  }
-
-  int _messageLength(String messageId) {
-    final index = _messages.indexWhere((element) => element.id == messageId);
-    if (index == -1) {
-      return 0;
-    }
-    return _messages[index].content.length;
-  }
-
-  void _updateMessageStatus(
-    String messageId,
-    ChatMessageStatus status, {
-    String? errorMessage,
-  }) {
-    final index = _messages.indexWhere((element) => element.id == messageId);
-    if (index == -1) {
-      return;
-    }
-    final current = _messages[index];
-    _messages[index] = current.copyWith(
-      status: status,
-      errorMessage: errorMessage ?? current.errorMessage,
-    );
-  }
-
-  void _updateMessageContentFormat(
-    String messageId,
-    MessageContentFormat contentFormat,
-  ) {
-    final index = _messages.indexWhere((element) => element.id == messageId);
-    if (index == -1) {
-      return;
-    }
-    final current = _messages[index];
-    _messages[index] = current.copyWith(contentFormat: contentFormat);
-  }
-
-  void _transitionTo(ChatGenerationState nextState) {
-    _generationState = nextState;
   }
 }
