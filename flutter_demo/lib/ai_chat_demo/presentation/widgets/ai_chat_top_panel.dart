@@ -3,20 +3,19 @@ import 'package:flutter/material.dart';
 import 'ai_chat_info_card.dart';
 
 class AiChatTopPanel extends StatelessWidget {
-  final bool isConnected;
-  final int unreadCount;
-  final String generationLabel;
-  final List<String> latestSteps;
-  final List<String> latestEvents;
-
   const AiChatTopPanel({
-    super.key,
     required this.isConnected,
     required this.unreadCount,
     required this.generationLabel,
     required this.latestSteps,
     required this.latestEvents,
+    super.key,
   });
+  final bool isConnected;
+  final int unreadCount;
+  final String generationLabel;
+  final List<String> latestSteps;
+  final List<String> latestEvents;
 
   @override
   Widget build(BuildContext context) {

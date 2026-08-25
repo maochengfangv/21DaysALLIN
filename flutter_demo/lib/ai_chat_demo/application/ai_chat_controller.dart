@@ -117,7 +117,23 @@ class AiChatController extends ChangeNotifier {
 
   Future<void> stopGenerating() => _coordinator.stopGenerating();
 
-  Future<void> pickImageFromGallery() => _coordinator.pickImageFromGallery();
+  Future<void> pickImageFromGallery() async {
+    // ===== Check-images-bug 节点③：兼容层 AiChatController =====
+    final tCompat = DateTime.now().millisecondsSinceEpoch;
+    final before = _coordinator.selectedImages.length;
+    debugPrint(
+      '[Check-images-bug][③AiChatController] 进入兼容层 pickImageFromGallery，T=$tCompat，selectedImages 数量=$before，转发给 Coordinator',
+    );
+    try {
+      await _coordinator.pickImageFromGallery();
+    } finally {
+      final after = _coordinator.selectedImages.length;
+      final cost = DateTime.now().millisecondsSinceEpoch - tCompat;
+      debugPrint(
+        '[Check-images-bug][③AiChatController] Coordinator 返回，兼容层耗时=${cost}ms，selectedImages 数量=$before→$after',
+      );
+    }
+  }
 
   Future<void> startVoiceInput() => _coordinator.startVoiceInput();
 

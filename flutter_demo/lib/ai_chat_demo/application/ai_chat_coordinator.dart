@@ -34,6 +34,11 @@ class AiChatCoordinator extends ChangeNotifier {
     voiceInputController.addListener(_onVoiceStateChanged);
     // ===== 场景2：消息发送成功 → 清空已选附件（可配置策略） =====
     messageController.addListener(_onMessageStateChanged);
+    // ===== 🔴 Bug1修复：Coordinator 必须监听4个子域的全部通知 =====
+    // attachmentController.selectedImages 变化 → 触发 Coordinator 转发给 UI
+    attachmentController.addListener(notifyListeners);
+    // sessionEventController.unread/isConnected 变化 → 触发 Coordinator 转发
+    sessionEventController.addListener(notifyListeners);
   }
 
   void _onVoiceStateChanged() {
@@ -98,8 +103,24 @@ class AiChatCoordinator extends ChangeNotifier {
   List<SelectedImageAttachment> get selectedImages =>
       attachmentController.selectedImages;
 
-  Future<void> pickImageFromGallery() =>
-      attachmentController.pickImagesFromGallery();
+  Future<void> pickImageFromGallery() async {
+    // ===== Check-images-bug 节点④：Coordinator 层 =====
+    final tCoord = DateTime.now().millisecondsSinceEpoch;
+    final before = attachmentController.selectedImages.length;
+    debugPrint(
+      '[Check-images-bug][④AiChatCoordinator] 进入 Coordinator.pickImageFromGallery，T=$tCoord，selectedImages 数量=$before，转发给 AttachmentController',
+    );
+    try {
+      await attachmentController.pickImagesFromGallery();
+    } finally {
+      final after = attachmentController.selectedImages.length;
+      final cost = DateTime.now().millisecondsSinceEpoch - tCoord;
+      debugPrint(
+        '[Check-images-bug][④AiChatCoordinator] AttachmentController 返回，Coordinator 耗时=${cost}ms，selectedImages 数量=$before→$after',
+      );
+    }
+  }
+
   void removeSelectedImage(String localPath) =>
       attachmentController.removeImage(localPath);
 
@@ -118,9 +139,12 @@ class AiChatCoordinator extends ChangeNotifier {
 
   @override
   void dispose() {
-    // 管理生命周期:
+    // 管理生命周期: 按注册逆序 removeListener
     messageController.removeListener(_onMessageStateChanged);
     voiceInputController.removeListener(_onVoiceStateChanged);
+    // 🔴 Bug1修复：移除 attachment/session 的转发监听
+    attachmentController.removeListener(notifyListeners);
+    sessionEventController.removeListener(notifyListeners);
 
     messageController.dispose();
     voiceInputController.dispose();
