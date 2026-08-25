@@ -7,7 +7,7 @@ class MockUserProfileRemoteDataSource {
 
   Future<UserProfileDto> fetchUserProfile() async {
     debugPrint('[基建层] RemoteDataSource.fetchUserProfile -> 模拟远端请求开始');
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future<void>.delayed(const Duration(milliseconds: 600));
 
     const dto = UserProfileDto(
       userId: 1001,

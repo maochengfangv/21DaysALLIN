@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 class AnimationDemoPage extends StatefulWidget {
-  static const routeName = '/animation-demo';
   const AnimationDemoPage({super.key});
+  static const routeName = '/animation-demo';
 
   @override
   State<AnimationDemoPage> createState() => _AnimationDemoPageState();
@@ -144,7 +144,7 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
                         color: theme.colorScheme.primary.withOpacity(0.5),
                         blurRadius: 30,
                         spreadRadius: 5,
-                      )
+                      ),
                     ]
                   : null,
             ),
@@ -168,7 +168,8 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
                 AnimatedAlign(
                   duration: const Duration(milliseconds: 800),
                   curve: Curves.easeInOutCubic,
-                  alignment: _implicitOn ? Alignment.topRight : Alignment.bottomLeft,
+                  alignment:
+                      _implicitOn ? Alignment.topRight : Alignment.bottomLeft,
                   child: AnimatedOpacity(
                     duration: const Duration(milliseconds: 800),
                     opacity: _implicitOn ? 1.0 : 0.4,
@@ -185,7 +186,8 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
                 AnimatedAlign(
                   duration: const Duration(milliseconds: 800),
                   curve: Curves.easeInOutCubic,
-                  alignment: _implicitOn ? Alignment.bottomLeft : Alignment.topRight,
+                  alignment:
+                      _implicitOn ? Alignment.bottomLeft : Alignment.topRight,
                   child: AnimatedOpacity(
                     duration: const Duration(milliseconds: 800),
                     opacity: _implicitOn ? 1.0 : 0.4,
@@ -214,8 +216,7 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
             duration: const Duration(milliseconds: 400),
             style: TextStyle(
               fontSize: 20 + _sliderValue * 30,
-              color: Color.lerp(
-                      Colors.blue, Colors.red, _sliderValue) ??
+              color: Color.lerp(Colors.blue, Colors.red, _sliderValue) ??
                   Colors.blue,
               fontWeight: FontWeight.w400,
             ),
@@ -269,10 +270,11 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: (_color.value ?? Colors.blue).withOpacity(0.4),
+                              color: (_color.value ?? Colors.blue)
+                                  .withOpacity(0.4),
                               blurRadius: 20,
                               spreadRadius: 4,
-                            )
+                            ),
                           ],
                         ),
                         child: const Icon(
@@ -300,7 +302,7 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
                   const SizedBox(height: 8),
                   Text(
                     'Controller value: ${_controller.value.toStringAsFixed(2)} | '
-                    '状态: ${_controllerStatusText}',
+                    '状态: $_controllerStatusText',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -356,10 +358,10 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
   // 🟡 Tab 3: 自定义 AnimatedWidget（可复用的动画组件）
   // ==========================================
   Widget _buildCustomWidgetTab(ThemeData theme) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+    return const SingleChildScrollView(
+      padding: EdgeInsets.all(20),
       child: Column(
-        children: const [
+        children: [
           Text(
             '⭐️ AnimatedWidget 最佳实践：\n'
             '将动画逻辑封装为独立组件，与业务解耦\n'
@@ -367,13 +369,10 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
           SizedBox(height: 32),
-
           _PulseLoadingIndicator(),
           SizedBox(height: 32),
-
           _HeartbeatButton(),
           SizedBox(height: 32),
-
           _SpinningCircleProgress(),
         ],
       ),
@@ -420,7 +419,8 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
                 return AnimatedBuilder(
                   animation: animation,
                   builder: (context, child) {
-                    final rotation = Curves.easeInOut.transform(animation.value);
+                    final rotation =
+                        Curves.easeInOut.transform(animation.value);
                     return Transform.rotate(
                       angle: rotation * 3.14159,
                       child: Material(
@@ -448,7 +448,7 @@ class _AnimationDemoPageState extends State<AnimationDemoPage>
                         color: Colors.deepPurple.withOpacity(0.4),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
-                      )
+                      ),
                     ],
                   ),
                   padding: const EdgeInsets.all(20),
@@ -520,8 +520,7 @@ class _PulseLoadingIndicatorState extends State<_PulseLoadingIndicator>
 /// 🎯 核心：继承 AnimatedWidget，将动画 listenable 传入父类
 /// 框架自动监听动画并调用 build，无需手动 addListener + setState
 class _PulseTransition extends AnimatedWidget {
-  const _PulseTransition({required Listenable listenable})
-      : super(listenable: listenable);
+  const _PulseTransition({required super.listenable});
 
   @override
   Widget build(BuildContext context) {
@@ -539,10 +538,12 @@ class _PulseTransition extends AnimatedWidget {
             child: Transform.scale(
               // 错相位：每个点错开 0.15 的相位
               scale: Interval(
-                i * 0.15,
-                0.6 + i * 0.15,
-                curve: Curves.elasticOut,
-              ).transform(animation.value) * 0.6 + 0.4,
+                        i * 0.15,
+                        0.6 + i * 0.15,
+                        curve: Curves.elasticOut,
+                      ).transform(animation.value) *
+                      0.6 +
+                  0.4,
               child: Opacity(
                 opacity: Interval(
                   i * 0.1,
@@ -615,14 +616,14 @@ class _HeartbeatButtonState extends State<_HeartbeatButton>
 }
 
 class _HeartbeatTransition extends AnimatedWidget {
-  final bool liked;
-  final VoidCallback onTap;
 
   const _HeartbeatTransition({
     required Animation<double> animation,
     required this.liked,
     required this.onTap,
   }) : super(listenable: animation);
+  final bool liked;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -679,8 +680,7 @@ class _HeartbeatCurve extends Curve {
     } else if (clampedT < 0.7) {
       return _clamp01(
         0.7 +
-            Curves.elasticOut.transform(_clamp01((clampedT - 0.5) / 0.2)) *
-                0.3,
+            Curves.elasticOut.transform(_clamp01((clampedT - 0.5) / 0.2)) * 0.3,
       );
     } else {
       return _clamp01(
@@ -727,8 +727,7 @@ class _SpinningCircleProgressState extends State<_SpinningCircleProgress>
 }
 
 class _SpinningProgress extends AnimatedWidget {
-  const _SpinningProgress({required Listenable listenable})
-      : super(listenable: listenable);
+  const _SpinningProgress({required super.listenable});
 
   @override
   Widget build(BuildContext context) {
@@ -745,8 +744,8 @@ class _SpinningProgress extends AnimatedWidget {
 }
 
 class _CircularPainter extends CustomPainter {
-  final double progress;
   _CircularPainter(this.progress);
+  final double progress;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -819,7 +818,7 @@ class _HeroDetailPage extends StatelessWidget {
                         color: Colors.deepPurple.withOpacity(0.4),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
-                      )
+                      ),
                     ],
                   ),
                   padding: const EdgeInsets.all(24),

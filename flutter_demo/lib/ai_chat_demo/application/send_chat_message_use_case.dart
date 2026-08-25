@@ -7,7 +7,7 @@ class SendChatMessageUseCase {
 
   SendChatMessageUseCase(this.repository);
 
- Stream<ReplyStreamEvent> call({
+  Stream<ReplyStreamEvent> call({
     required String userInput,
     required String assistantMessageId,
   }) {

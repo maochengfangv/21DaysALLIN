@@ -68,8 +68,12 @@ class BaselineListItem extends StatelessWidget {
                             IconButton(
                               onPressed: onToggle,
                               icon: Icon(
-                                highlight ? Icons.favorite : Icons.favorite_border,
-                                color: highlight ? theme.colorScheme.primary : null,
+                                highlight
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color: highlight
+                                    ? theme.colorScheme.primary
+                                    : null,
                               ),
                             ),
                           ],

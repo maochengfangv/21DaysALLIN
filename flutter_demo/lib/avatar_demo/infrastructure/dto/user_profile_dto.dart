@@ -15,15 +15,17 @@ class UserProfileDto {
 
   UserProfile toEntity() {
     debugPrint('[基建层] UserProfileDto.toEntity -> 开始 DTO 转 Entity');
-    final normalizedName =
-        (nickName == null || nickName!.trim().isEmpty) ? '未命名用户' : nickName!.trim();
+    final normalizedName = (nickName == null || nickName!.trim().isEmpty)
+        ? '未命名用户'
+        : nickName!.trim();
 
     final entity = UserProfile(
       id: '${userId ?? 0}',
       name: normalizedName,
       avatarUrl: avatarUrl ?? 'https://i.pravatar.cc/150?img=12',
     );
-    debugPrint('[基建层] UserProfileDto.toEntity -> 转换完成 id=${entity.id}, name=${entity.name}');
+    debugPrint(
+        '[基建层] UserProfileDto.toEntity -> 转换完成 id=${entity.id}, name=${entity.name}');
     return entity;
   }
 }

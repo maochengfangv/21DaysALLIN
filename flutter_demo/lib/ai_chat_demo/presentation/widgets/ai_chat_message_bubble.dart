@@ -6,12 +6,12 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/message_content_format.dart';
 
 class AiChatMessageBubble extends StatelessWidget {
-  final ChatMessage message;
 
   const AiChatMessageBubble({
     super.key,
     required this.message,
   });
+  final ChatMessage message;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +54,6 @@ class AiChatMessageBubble extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: _resolveBorderColor(colorScheme),
-            width: 1,
           ),
         ),
         child: Column(
@@ -127,7 +126,6 @@ class AiChatMessageBubble extends StatelessWidget {
       return MarkdownBody(
         data: displayText,
         selectable: true,
-        shrinkWrap: true,
         onTapLink: (text, href, title) => _handleTapLink(context, href),
       );
     }
@@ -135,7 +133,7 @@ class AiChatMessageBubble extends StatelessWidget {
   }
 
   Future<void> _handleTapLink(BuildContext context, String? href) async {
-        debugPrint('[_handleTapLink]  -> $href');
+    debugPrint('[_handleTapLink]  -> $href');
 
     if (href == null || href.isEmpty) {
       return;
@@ -147,15 +145,23 @@ class AiChatMessageBubble extends StatelessWidget {
       return;
     }
 
-    final canOpen = await canLaunchUrl(uri);
-    if (!canOpen) {
-      _showLinkToast(context, '暂时无法打开链接');
-      return;
-    }
+    try {
+      final canOpen = await canLaunchUrl(uri);
+      if (!canOpen) {
+        if (context.mounted) {
+          _showLinkToast(context, '暂时无法打开链接');
+        }
+        return;
+      }
 
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && context.mounted) {
-      _showLinkToast(context, '打开链接失败');
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && context.mounted) {
+        _showLinkToast(context, '打开链接失败');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        _showLinkToast(context, '打开链接失败，请稍后重试');
+      }
     }
   }
 

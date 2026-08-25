@@ -6,9 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 const int _checksumMod = 1000000007;
-const String _networkSnippet = "final response = await http.get(Uri.parse(url));";
-const String _databaseSnippet = "final rows = await database.query('messages');";
-const String _fileSnippet = "final text = await rootBundle.loadString('assets/demo.json');";
+const String _networkSnippet =
+    "final response = await http.get(Uri.parse(url));";
+const String _databaseSnippet =
+    "final rows = await database.query('messages');";
+const String _fileSnippet =
+    "final text = await rootBundle.loadString('assets/demo.json');";
 
 bool _isPrime(int value) {
   if (value < 2) return false;
@@ -578,15 +581,18 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
               alignment: WrapAlignment.center,
               children: [
                 FilledButton(
-                  onPressed: _isRunning ? null : () => unawaited(_runOnMainIsolate()),
+                  onPressed:
+                      _isRunning ? null : () => unawaited(_runOnMainIsolate()),
                   child: const Text('主 isolate 同步计算'),
                 ),
                 FilledButton.tonal(
-                  onPressed: _isRunning ? null : () => unawaited(_runWithCompute()),
+                  onPressed:
+                      _isRunning ? null : () => unawaited(_runWithCompute()),
                   child: const Text('compute()'),
                 ),
                 OutlinedButton(
-                  onPressed: _isRunning ? null : () => unawaited(_runWithSpawn()),
+                  onPressed:
+                      _isRunning ? null : () => unawaited(_runWithSpawn()),
                   child: const Text('Isolate.spawn()'),
                 ),
                 TextButton(
@@ -652,7 +658,8 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                   children: [
                     Text('I/O 密集型任务', style: theme.textTheme.titleMedium),
                     const SizedBox(height: 8),
-                    const Text('网络请求、数据库、文件读取通常是等待外部资源返回，核心是使用异步 API 让主 isolate 继续处理动画与交互，而不是为这类任务优先创建 isolate。'),
+                    const Text(
+                        '网络请求、数据库、文件读取通常是等待外部资源返回，核心是使用异步 API 让主 isolate 继续处理动画与交互，而不是为这类任务优先创建 isolate。'),
                     const SizedBox(height: 12),
                     Text('最近执行：$_lastIoType'),
                     Text(_ioStatus),
@@ -662,15 +669,24 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                       runSpacing: 12,
                       children: [
                         FilledButton.tonal(
-                          onPressed: _ioRunning ? null : () => unawaited(_runIoTask('网络请求', const Duration(seconds: 2))),
+                          onPressed: _ioRunning
+                              ? null
+                              : () => unawaited(_runIoTask(
+                                  '网络请求', const Duration(seconds: 2))),
                           child: const Text('模拟网络请求'),
                         ),
                         FilledButton.tonal(
-                          onPressed: _ioRunning ? null : () => unawaited(_runIoTask('数据库查询', const Duration(milliseconds: 1600))),
+                          onPressed: _ioRunning
+                              ? null
+                              : () => unawaited(_runIoTask(
+                                  '数据库查询', const Duration(milliseconds: 1600))),
                           child: const Text('模拟数据库查询'),
                         ),
                         FilledButton.tonal(
-                          onPressed: _ioRunning ? null : () => unawaited(_runIoTask('文件读取', const Duration(milliseconds: 1200))),
+                          onPressed: _ioRunning
+                              ? null
+                              : () => unawaited(_runIoTask(
+                                  '文件读取', const Duration(milliseconds: 1200))),
                           child: const Text('模拟文件读取'),
                         ),
                       ],
@@ -714,7 +730,9 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                           child: const Text('启动前后台场景'),
                         ),
                         OutlinedButton(
-                          onPressed: _lifecycleScenarioRunning ? _stopLifecycleScenario : null,
+                          onPressed: _lifecycleScenarioRunning
+                              ? _stopLifecycleScenario
+                              : null,
                           child: const Text('停止前后台场景'),
                         ),
                       ],

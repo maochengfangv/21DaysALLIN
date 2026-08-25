@@ -15,7 +15,8 @@ class UserProfileRepositoryImpl implements UserProfileRepository {
   Future<UserProfile> fetchUserProfile() async {
     debugPrint('[基建层] RepositoryImpl.fetchUserProfile -> 调用 RemoteDataSource');
     final dto = await remoteDataSource.fetchUserProfile();
-    debugPrint('[基建层] RepositoryImpl.fetchUserProfile -> 拿到 DTO userId=${dto.userId}, nickName=${dto.nickName}');
+    debugPrint(
+        '[基建层] RepositoryImpl.fetchUserProfile -> 拿到 DTO userId=${dto.userId}, nickName=${dto.nickName}');
     final entity = dto.toEntity();
     debugPrint('[基建层] RepositoryImpl.fetchUserProfile -> DTO 转 Entity 完成');
     return entity;

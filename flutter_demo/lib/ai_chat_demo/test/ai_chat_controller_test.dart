@@ -1,35 +1,47 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_demo/ai_chat_demo/application/ai_chat_controller.dart';
-import 'package:flutter_demo/ai_chat_demo/application/chat_generation_state.dart';
-import 'package:flutter_demo/ai_chat_demo/application/observe_session_events_use_case.dart';
-import 'package:flutter_demo/ai_chat_demo/application/send_chat_message_use_case.dart';
-import 'package:flutter_demo/ai_chat_demo/application/stop_generation_use_case.dart';
-import 'package:flutter_demo/ai_chat_demo/domain/entities/chat_message.dart';
-import 'package:flutter_demo/ai_chat_demo/domain/entities/reply_stream_event.dart';
-import 'package:flutter_demo/ai_chat_demo/domain/entities/selected_image_attachment.dart';
-import 'package:flutter_demo/ai_chat_demo/domain/entities/session_realtime_event.dart';
-import 'package:flutter_demo/ai_chat_demo/domain/repositories/ai_chat_repository.dart';
-import 'package:flutter_demo/ai_chat_demo/domain/repositories/media_picker_repository.dart';
 
+import '../application/ai_chat_controller.dart';
+import '../application/cancel_voice_input_use_case.dart';
+import '../application/chat_generation_state.dart';
+import '../application/observe_session_events_use_case.dart';
 import '../application/pick_image_from_gallery_use_case.dart';
+import '../application/send_chat_message_use_case.dart';
+import '../application/start_voice_input_use_case.dart';
+import '../application/stop_generation_use_case.dart';
+import '../domain/entities/chat_message.dart';
+import '../domain/entities/reply_stream_event.dart';
+import '../domain/entities/selected_image_attachment.dart';
+import '../domain/entities/session_realtime_event.dart';
+import '../domain/entities/voice_input_result.dart';
+import '../domain/repositories/ai_chat_repository.dart';
+import '../domain/repositories/media_picker_repository.dart';
+import '../domain/repositories/voice_input_repository.dart';
 
 void main() {
   group('AiChatController', () {
     late _FakeAiChatRepository repository;
     late _FakeMediaPickerRepository mediaPickerRepository;
+    late _FakeVoiceInputRepository voiceInputRepository;
     late AiChatController controller;
 
     setUp(() {
       repository = _FakeAiChatRepository();
       mediaPickerRepository = _FakeMediaPickerRepository();
+      voiceInputRepository = _FakeVoiceInputRepository();
       controller = AiChatController(
         sendChatMessageUseCase: SendChatMessageUseCase(repository),
         stopGenerationUseCase: StopGenerationUseCase(repository),
         observeSessionEventsUseCase: ObserveSessionEventsUseCase(repository),
-        pickImageFromGalleryUseCase: PickImageFromGalleryUseCase(mediaPickerRepository),
-        disposeRepository: repository.dispose,
+        pickImageFromGalleryUseCase:
+            PickImageFromGalleryUseCase(mediaPickerRepository),
+        startVoiceInputUseCase: StartVoiceInputUseCase(voiceInputRepository),
+        cancelVoiceInputUseCase: CancelVoiceInputUseCase(voiceInputRepository),
+        disposeRepository: () {
+          repository.dispose();
+          voiceInputRepository.dispose();
+        },
       );
     });
 
@@ -155,11 +167,17 @@ void main() {
         ReplyDelta(messageId: assistantMessageId, text: '1. 按消息维度'),
       );
       repository.emitReplyEvent(
-        ReplyDelta(messageId: assistantMessageId, text: ' 2. 区分 pending/streaming/终态'),
+        ReplyDelta(
+          messageId: assistantMessageId,
+          text: ' 2. 区分 pending/streaming/终态',
+        ),
       );
       await Future<void>.delayed(Duration.zero);
       expect(controller.messages.last.status, ChatMessageStatus.streaming);
-      expect(controller.messages.last.content, '1. 按消息维度 2. 区分 pending/streaming/终态');
+      expect(
+        controller.messages.last.content,
+        '1. 按消息维度 2. 区分 pending/streaming/终态',
+      );
 
       repository.emitReplyEvent(ReplyFinished(messageId: assistantMessageId));
       await Future<void>.delayed(Duration.zero);
@@ -199,6 +217,22 @@ class _FakeMediaPickerRepository implements MediaPickerRepository {
   @override
   Future<List<SelectedImageAttachment>> pickImagesFromGallery() async {
     return nextImages;
+  }
+}
+
+class _FakeVoiceInputRepository implements VoiceInputRepository {
+  final StreamController<VoiceInputResult> _controller =
+      StreamController<VoiceInputResult>.broadcast();
+
+  @override
+  Future<Stream<VoiceInputResult>> startListening() async => _controller.stream;
+
+  @override
+  Future<void> cancelListening() async {}
+
+  @override
+  void dispose() {
+    unawaited(_controller.close());
   }
 }
 

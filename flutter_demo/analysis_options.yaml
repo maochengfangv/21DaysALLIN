@@ -9,20 +9,109 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # 全局错误级别配置，将常见问题升级为错误或警告
+  errors:
+    # 空安全相关：强制处理
+    missing_required_param: error
+    missing_return: error
+    invalid_annotation_target: warning
+
+    # 未使用代码：警告级别，不阻断构建
+    unused_import: warning
+    unused_local_variable: warning
+    unused_element: warning
+    unused_field: warning
+    dead_code: warning
+
+    # 类型安全相关
+    inference_failure_on_uninitialized_variable: error
+    inference_failure_on_function_return_type: error
+    inference_failure_on_instance_creation: error
+
+    # 弃用 API 使用
+    deprecated_member_use_from_same_package: warning
+
+  # 排除不需要静态检查的文件/目录
+  exclude:
+    - '**/*.g.dart'
+    - '**/*.freezed.dart'
+    - '**/*.mocks.dart'
+    - 'build/**'
+    - 'ios/**'
+    - 'android/**'
+    - 'linux/**'
+    - 'macos/**'
+    - 'windows/**'
+    - 'web/**'
+
+  # 语言特性开关
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
 linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at https://dart.dev/lints.
-  #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # ===== 基础风格 =====
+    prefer_single_quotes: true
+    always_put_required_named_parameters_first: true
+    require_trailing_commas: true
+    avoid_redundant_argument_values: true
+    prefer_relative_imports: true
+    sort_constructors_first: true
+    sort_pub_dependencies: true
+    prefer_final_locals: true
+    prefer_final_fields: true
+    avoid_print: true
+    no_leading_underscores_for_library_prefixes: true
+    no_leading_underscores_for_local_identifiers: true
+    sized_box_for_whitespace: true
+    sized_box_shrink_expand: true
+
+    # ===== 代码质量 =====
+    always_declare_return_types: true
+    avoid_dynamic_calls: true
+    avoid_types_as_parameter_names: true
+    cancel_subscriptions: true
+    close_sinks: true
+    collection_methods_unrelated_type: true
+    dangling_library_doc_comments: true
+    depend_on_referenced_packages: true
+    discarded_futures: true
+    implicit_call_tearoffs: true
+    iterable_contains_unrelated_type: true
+    list_remove_unrelated_type: true
+    no_literal_bool_comparisons: true
+    no_self_assignments: true
+    no_wildcard_variable_uses: true
+    only_throw_errors: true
+    secure_pubspec_urls: true
+    test_types_in_equals: true
+    throw_in_finally: true
+    tighten_type_of_initializing_formals: true
+    type_annotate_public_apis: true
+    unawaited_futures: true
+    unnecessary_statements: true
+    unsafe_html: true
+    use_build_context_synchronously: true
+    use_colored_box: true
+    use_decorated_box: true
+    use_if_null_to_convert_nulls_to_bools: true
+    use_is_even_rather_than_modulo: true
+    use_late_for_private_fields_and_variables: true
+    use_named_constants: true
+    use_raw_strings: true
+    use_string_in_part_of_directives: true
+    use_super_parameters: true
+    use_test_throws_matchers: true
+    use_to_and_as_if_applicable: true
+
+    # ===== 错误倾向 =====
+    empty_statements: true
+    hash_and_equals: true
+    no_duplicate_case_values: true
+    valid_regexps: true
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

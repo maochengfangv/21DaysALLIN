@@ -1,38 +1,50 @@
 import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_demo/ai_chat_demo/application/observe_session_events_use_case.dart';
-import 'package:flutter_demo/ai_chat_demo/application/send_chat_message_use_case.dart';
-import 'package:flutter_demo/ai_chat_demo/application/stop_generation_use_case.dart';
-import 'package:flutter_demo/ai_chat_demo/application/pick_image_from_gallery_use_case.dart';
-import 'package:flutter_demo/ai_chat_demo/domain/entities/selected_image_attachment.dart';
-import 'chat_generation_state.dart';
 
 import '../domain/entities/chat_message.dart';
 import '../domain/entities/message_content_format.dart';
 import '../domain/entities/reply_stream_event.dart';
+import '../domain/entities/selected_image_attachment.dart';
 import '../domain/entities/session_realtime_event.dart';
+import '../domain/entities/voice_input_result.dart';
+import 'cancel_voice_input_use_case.dart';
+import 'chat_generation_state.dart';
+import 'observe_session_events_use_case.dart';
+import 'pick_image_from_gallery_use_case.dart';
+import 'send_chat_message_use_case.dart';
+import 'start_voice_input_use_case.dart';
+import 'stop_generation_use_case.dart';
 
 class AiChatController extends ChangeNotifier {
-  final SendChatMessageUseCase sendChatMessageUseCase;
-  final StopGenerationUseCase stopGenerationUseCase;
-  final ObserveSessionEventsUseCase observeSessionEventsUseCase;
-  final PickImageFromGalleryUseCase pickImageFromGalleryUseCase;
-  final VoidCallback disposeRepository;
-
   AiChatController({
     required this.sendChatMessageUseCase,
     required this.stopGenerationUseCase,
     required this.observeSessionEventsUseCase,
     required this.pickImageFromGalleryUseCase,
+    required this.startVoiceInputUseCase,
+    required this.cancelVoiceInputUseCase,
     required this.disposeRepository,
   }) {
     _listenSessionEvents();
-    _messages.add(ChatMessage(
+    _messages.add(
+      ChatMessage(
         id: 'welcome',
         role: ChatRole.system,
         content: '这是一个离线可运行 Demo：SSE 负责回答流，WebSocket 负责实时事件流',
-        createdAt: DateTime.now()));
+        createdAt: DateTime.now(),
+      ),
+    );
   }
+
+  final SendChatMessageUseCase sendChatMessageUseCase;
+  final StopGenerationUseCase stopGenerationUseCase;
+  final ObserveSessionEventsUseCase observeSessionEventsUseCase;
+  final PickImageFromGalleryUseCase pickImageFromGalleryUseCase;
+  final StartVoiceInputUseCase startVoiceInputUseCase;
+  final CancelVoiceInputUseCase cancelVoiceInputUseCase;
+  final VoidCallback disposeRepository;
+
   final List<ChatMessage> _messages = [];
   final List<String> _replySteps = [];
   final List<SessionRealtimeEvent> _sessionEvents = [];
@@ -40,17 +52,21 @@ class AiChatController extends ChangeNotifier {
 
   StreamSubscription<ReplyStreamEvent>? _replySubscription;
   StreamSubscription<SessionRealtimeEvent>? _sessionSubscription;
+  StreamSubscription<VoiceInputResult>? _voiceInputSubscription;
 
   ChatGenerationState _generationState = const IdleState();
   bool _isConnected = false;
   int _unreadCount = 0;
+  bool _isVoiceListening = false;
+  String _voiceRecognizedText = '';
+  String? _voiceInputError;
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   List<String> get replySteps => List.unmodifiable(_replySteps);
   List<SessionRealtimeEvent> get sessionEvents =>
       List.unmodifiable(_sessionEvents);
-
-  List<SelectedImageAttachment> get selectedImages => List.unmodifiable(_selectedImages);
+  List<SelectedImageAttachment> get selectedImages =>
+      List.unmodifiable(_selectedImages);
 
   ChatGenerationState get generationState => _generationState;
   bool get isGenerating => _generationState.isInFlight;
@@ -60,6 +76,11 @@ class AiChatController extends ChangeNotifier {
 
   bool get isConnected => _isConnected;
   int get unreadCount => _unreadCount;
+  bool get isVoiceListening => _isVoiceListening;
+  String get voiceRecognizedText => _voiceRecognizedText;
+  String? get voiceInputError => _voiceInputError;
+  bool get canSendVoiceRecognizedText =>
+      !_isVoiceListening && _voiceRecognizedText.trim().isNotEmpty;
 
   String? get currentAssistantMessageId => _generationState.assistantMessageId;
 
@@ -96,10 +117,11 @@ class AiChatController extends ChangeNotifier {
     }
 
     final userMessage = ChatMessage(
-        id: 'user_${DateTime.now().microsecondsSinceEpoch}',
-        role: ChatRole.user,
-        content: text,
-        createdAt: DateTime.now());
+      id: 'user_${DateTime.now().microsecondsSinceEpoch}',
+      role: ChatRole.user,
+      content: text,
+      createdAt: DateTime.now(),
+    );
 
     final asssistantMessageId =
         'assistant_${DateTime.now().microsecondsSinceEpoch}';
@@ -126,8 +148,9 @@ class AiChatController extends ChangeNotifier {
     notifyListeners();
     await _replySubscription?.cancel();
     _replySubscription = sendChatMessageUseCase(
-            userInput: text, assistantMessageId: asssistantMessageId)
-        .listen(_handleReplyEvent);
+      userInput: text,
+      assistantMessageId: asssistantMessageId,
+    ).listen(_handleReplyEvent);
   }
 
   void _handleReplyEvent(ReplyStreamEvent event) {
@@ -140,12 +163,14 @@ class AiChatController extends ChangeNotifier {
         _updateMessageContentFormat(messageId, contentFormat);
         _updateMessageStatus(messageId, ChatMessageStatus.streaming);
         _transitionTo(
-            PreparingState(assistantMessageId: messageId, step: step));
+          PreparingState(assistantMessageId: messageId, step: step),
+        );
       case ReplyStatus(:final messageId, :final text):
         _appendReplyStep(text);
         _updateMessageStatus(messageId, ChatMessageStatus.streaming);
         _transitionTo(
-            PreparingState(assistantMessageId: messageId, step: text));
+          PreparingState(assistantMessageId: messageId, step: text),
+        );
       case ReplyDelta(:final messageId, :final text):
         _appendDelta(messageId, text);
         _updateMessageStatus(messageId, ChatMessageStatus.streaming);
@@ -161,15 +186,21 @@ class AiChatController extends ChangeNotifier {
         _transitionTo(CompletedState(assistantMessageId: messageId));
       case ReplyCanceled(:final messageId, :final reason):
         _appendReplyStep(reason);
-        _updateMessageStatus(messageId, ChatMessageStatus.canceled,
-            errorMessage: reason);
+        _updateMessageStatus(
+          messageId,
+          ChatMessageStatus.canceled,
+          errorMessage: reason,
+        );
         _transitionTo(
           CanceledState(assistantMessageId: messageId, reason: reason),
         );
       case ReplyFailed(:final messageId, :final error):
         _appendReplyStep('生成失败: $error');
-        _updateMessageStatus(messageId, ChatMessageStatus.failed,
-            errorMessage: error);
+        _updateMessageStatus(
+          messageId,
+          ChatMessageStatus.failed,
+          errorMessage: error,
+        );
         _transitionTo(FailedState(assistantMessageId: messageId, error: error));
     }
 
@@ -206,27 +237,79 @@ class AiChatController extends ChangeNotifier {
   }
 
   Future<void> pickImageFromGallery() async {
-   final images =  await pickImageFromGalleryUseCase();
-   if (images.isEmpty) {
-    return;
-   }
+    final images = await pickImageFromGalleryUseCase();
+    if (images.isEmpty) {
+      return;
+    }
 
-  //  _messages.add(ChatMessage(id: 'system_image_${DateTime.now().microsecondsSinceEpoch}', role: ChatRole.system, content: '已选择图片：$imagePath', createdAt: DateTime.now()));
-  //  notifyListeners();
-
-  final existingPaths = _selectedImages.map((e) => e.localPath).toSet();
-  for (final image in images) {
-      if(!existingPaths.contains(image.localPath)) {
+    final existingPaths = _selectedImages.map((e) => e.localPath).toSet();
+    for (final image in images) {
+      if (!existingPaths.contains(image.localPath)) {
         _selectedImages.add(image);
       }
+    }
+    notifyListeners();
   }
-  notifyListeners();
+
+  Future<void> startVoiceInput() async {
+    await _voiceInputSubscription?.cancel();
+    _voiceRecognizedText = '';
+    _voiceInputError = null;
+    _isVoiceListening = true;
+    notifyListeners();
+
+    try {
+      final stream = await startVoiceInputUseCase();
+      _voiceInputSubscription = stream.listen(
+        (result) {
+          _voiceRecognizedText = result.text;
+          _isVoiceListening = !result.isFinal;
+          notifyListeners();
+        },
+        onError: (Object error) {
+          _voiceInputError = '语音识别失败：$error';
+          _isVoiceListening = false;
+          notifyListeners();
+        },
+      );
+    } catch (error) {
+      _voiceInputError = '语音识别启动失败：$error';
+      _isVoiceListening = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> cancelVoiceInput() async {
+    await _voiceInputSubscription?.cancel();
+    _voiceInputSubscription = null;
+    await cancelVoiceInputUseCase();
+    _voiceRecognizedText = '';
+    _voiceInputError = null;
+    _isVoiceListening = false;
+    notifyListeners();
+  }
+
+  String consumeVoiceRecognizedText() {
+    final text = _voiceRecognizedText.trim();
+    _voiceRecognizedText = '';
+    _voiceInputError = null;
+    _isVoiceListening = false;
+    notifyListeners();
+    return text;
+  }
+
+  void resetVoiceInput() {
+    _voiceRecognizedText = '';
+    _voiceInputError = null;
+    _isVoiceListening = false;
+    notifyListeners();
   }
 
   @override
   void dispose() {
     _replySubscription?.cancel();
     _sessionSubscription?.cancel();
+    _voiceInputSubscription?.cancel();
     disposeRepository();
     super.dispose();
   }

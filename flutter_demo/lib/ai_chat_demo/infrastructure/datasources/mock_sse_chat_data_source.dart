@@ -12,22 +12,21 @@ class MockSseChatDataSource {
     required String userInput,
     required String assistantMessageId,
   }) async* {
-     debugPrint('[基础设施层][SSE] 建立回答流 assistantMessageId=$assistantMessageId');
+    debugPrint('[基础设施层][SSE] 建立回答流 assistantMessageId=$assistantMessageId');
     _stopFlags[assistantMessageId] = false;
     try {
       yield ReplyStarted(
         messageId: assistantMessageId,
         contentFormat: MessageContentFormat.markdown,
       );
-      
-      const steps = <String> [
+
+      const steps = <String>[
         '正在检索知识库',
         '正在分析上下文',
         '正在生成最终回答',
       ];
 
       for (final step in steps) {
-
         if (_shouldStop(assistantMessageId)) {
           yield ReplyCanceled(
             messageId: assistantMessageId,
@@ -36,24 +35,24 @@ class MockSseChatDataSource {
           return;
         }
 
-        await Future.delayed(const Duration(milliseconds: 650));
+        await Future<void>.delayed(const Duration(milliseconds: 650));
         yield ReplyStatus(messageId: assistantMessageId, text: step);
       }
 
       final chunks = _splitAnswer(_buildMockAnswer(userInput));
       for (final chunk in chunks) {
-        if(_shouldStop(assistantMessageId)) {
+        if (_shouldStop(assistantMessageId)) {
           yield ReplyCanceled(
             messageId: assistantMessageId,
             reason: '用户已停止生成',
           );
           return;
         }
-        await Future.delayed(const Duration(milliseconds: 220));
+        await Future<void>.delayed(const Duration(milliseconds: 220));
         yield ReplyDelta(messageId: assistantMessageId, text: chunk);
       }
 
-      yield ReplyFinished(messageId: assistantMessageId); 
+      yield ReplyFinished(messageId: assistantMessageId);
     } catch (error) {
       yield ReplyFailed(messageId: assistantMessageId, error: error.toString());
     } finally {
@@ -61,15 +60,16 @@ class MockSseChatDataSource {
     }
   }
 
-    Future<void> stopReply(String assistantMessageId) async {
+  Future<void> stopReply(String assistantMessageId) async {
     debugPrint('[基础设施层][SSE] 标记停止 assistantMessageId=$assistantMessageId');
     _stopFlags[assistantMessageId] = true;
   }
+
   bool _shouldStop(String assistantMessageId) {
-     return _stopFlags[assistantMessageId] ?? false;
+    return _stopFlags[assistantMessageId] ?? false;
   }
 
-    String _buildMockAnswer(String userInput) {
+  String _buildMockAnswer(String userInput) {
     return '# AI 回答示例\n\n'
         '你刚刚输入的是：**$userInput**。\n\n'
         '这是一次通过 SSE 返回的 Markdown 富文本示例：\n\n'

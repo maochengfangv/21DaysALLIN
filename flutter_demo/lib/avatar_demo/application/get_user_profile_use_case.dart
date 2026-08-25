@@ -13,7 +13,8 @@ class GetUserProfileUseCase {
   Future<UserProfile> call() async {
     debugPrint('[应用层] GetUserProfileUseCase.call -> 开始调用 Repository');
     final profile = await repository.fetchUserProfile();
-    debugPrint('[应用层] GetUserProfileUseCase.call -> 返回 Entity id=${profile.id}, name=${profile.name}');
+    debugPrint(
+        '[应用层] GetUserProfileUseCase.call -> 返回 Entity id=${profile.id}, name=${profile.name}');
     return profile;
   }
 }

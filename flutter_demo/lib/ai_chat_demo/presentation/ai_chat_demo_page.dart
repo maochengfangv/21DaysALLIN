@@ -3,13 +3,12 @@ import 'package:flutter/material.dart';
 import '../application/ai_chat_controller.dart';
 import 'widgets/ai_chat_input_bar.dart';
 import 'widgets/ai_chat_message_bubble.dart';
-import 'widgets/ai_chat_top_panel.dart';
+import 'widgets/ai_chat_voice_input_sheet.dart';
 
 class AiChatDemoPage extends StatefulWidget {
+  const AiChatDemoPage({super.key, required this.controller});
 
   final AiChatController controller;
-
-  const AiChatDemoPage({super.key, required this.controller});
 
   @override
   State<AiChatDemoPage> createState() => _AiChatDemoPageState();
@@ -26,7 +25,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
     _inputController.dispose();
     _messageScrollController.dispose();
     widget.controller.dispose();
-    
+
     super.dispose();
   }
 
@@ -35,18 +34,66 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
   }
 
   Future<void> _handleSend() async {
-   final text = _inputController.text.trim();
-   if (text.isEmpty) {
-    return;
-   }
-   _inputController.clear();
-   _dismissKeyboard();
-   await widget.controller.sendMessage(text);
+    final text = _inputController.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    _inputController.clear();
+    _dismissKeyboard();
+    await widget.controller.sendMessage(text);
+  }
+
+  Future<void> _handleOpenVoiceInput() async {
+    _dismissKeyboard();
+    await widget.controller.startVoiceInput();
+    if (!mounted) {
+      return;
+    }
+
+    final recognizedText = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return AnimatedBuilder(
+          animation: widget.controller,
+          builder: (context, _) {
+            final controller = widget.controller;
+            return AiChatVoiceInputSheet(
+              isListening: controller.isVoiceListening,
+              recognizedText: controller.voiceRecognizedText,
+              errorText: controller.voiceInputError,
+              onCancel: () async {
+                await controller.cancelVoiceInput();
+                if (sheetContext.mounted) {
+                  Navigator.of(sheetContext).pop();
+                }
+              },
+              onSend: controller.canSendVoiceRecognizedText
+                  ? () {
+                      final text = controller.consumeVoiceRecognizedText();
+                      Navigator.of(sheetContext).pop(text);
+                    }
+                  : null,
+            );
+          },
+        );
+      },
+    );
+
+    widget.controller.resetVoiceInput();
+    if (!mounted || recognizedText == null || recognizedText.trim().isEmpty) {
+      return;
+    }
+    _inputController.text = recognizedText;
+    await _handleSend();
   }
 
   void _scheduleScrollToBottom({bool animated = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_messageScrollController.hasClients) return;
+      if (!_messageScrollController.hasClients) {
+        return;
+      }
       final position = _messageScrollController.position.maxScrollExtent;
       if (animated) {
         _messageScrollController.animateTo(
@@ -62,13 +109,11 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
 
   @override
   Widget build(BuildContext context) {
-   return AnimatedBuilder(
+    return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
         final controller = widget.controller;
         final isKeyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
-        final latestEvents = controller.sessionEvents.reversed.take(3).toList();
-        final latestSteps = controller.replySteps.reversed.take(4).toList();
 
         if (controller.messages.length != _lastMessageCount) {
           _lastMessageCount = controller.messages.length;
@@ -87,60 +132,53 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
             onTap: _dismissKeyboard,
             child: Column(
               children: [
-              ClipRect(
-                child: AnimatedSize(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeInOut,
-                  alignment: Alignment.topCenter,
-                  child: isKeyboardVisible
-                      ? const SizedBox.shrink()
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // AiChatTopPanel(
-                            //   isConnected: controller.isConnected,
-                            //   unreadCount: controller.unreadCount,
-                            //   generationLabel: controller.generationLabel,
-                            //   latestSteps: latestSteps,
-                            //   latestEvents: latestEvents
-                            //       .map((e) => e.description)
-                            //       .toList(),
-                            // ),
-                            const Divider(height: 1),
-                          ],
+                ClipRect(
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: isKeyboardVisible
+                        ? const SizedBox.shrink()
+                        : const Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Divider(height: 1),
+                            ],
+                          ),
+                  ),
+                ),
+                Expanded(
+                  child: controller.messages.isEmpty
+                      ? const Center(child: Text('还没有消息'))
+                      : ListView.builder(
+                          controller: _messageScrollController,
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: const EdgeInsets.all(12),
+                          itemCount: controller.messages.length,
+                          itemBuilder: (context, index) {
+                            return AiChatMessageBubble(
+                              message: controller.messages[index],
+                            );
+                          },
                         ),
                 ),
-              ),
-              Expanded(
-                child: controller.messages.isEmpty
-                    ? const Center(child: Text('还没有消息'))
-                    : ListView.builder(
-                        controller: _messageScrollController,
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: const EdgeInsets.all(12),
-                        itemCount: controller.messages.length,
-                        itemBuilder: (context, index) {
-                          return AiChatMessageBubble(message: controller.messages[index]);
-                        },
-                      ),
-              ),
-              const Divider(height: 1),
-              AiChatInputBar(
-                inputController: _inputController,
-                selectedImages: controller.selectedImages,
-                canSend: controller.canSend,
-                canStop: controller.canStop,
-                onSend: _handleSend,
-                onStop: controller.stopGenerating,
-                onPickAlbum: controller.pickImageFromGallery,
-              ),
-            ],
-          ),
+                const Divider(height: 1),
+                AiChatInputBar(
+                  inputController: _inputController,
+                  selectedImages: controller.selectedImages,
+                  canSend: controller.canSend,
+                  canStop: controller.canStop,
+                  onSend: _handleSend,
+                  onStop: controller.stopGenerating,
+                  onPickAlbum: controller.pickImageFromGallery,
+                  onOpenVoiceInput: _handleOpenVoiceInput,
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 }
-

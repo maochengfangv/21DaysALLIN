@@ -8,7 +8,6 @@ import '../main.dart';
 import '../utils/scroll_activity_notifier.dart';
 import '../widgets/list_item_optimized.dart';
 
-
 class _LoadMoreFooter extends StatelessWidget {
   final bool isLoading;
   final bool hasMore;
@@ -139,15 +138,21 @@ class _OptimizedListPageState extends State<OptimizedListPage> {
   void initState() {
     super.initState();
     _controller = ScrollController();
-    _scrollActivity = ScrollActivityNotifier(idleDebounce: const Duration(milliseconds: 200));
-    _store = ItemStore(pageSize: 50, totalLimit: 20000, repository: const ItemRepository(simulatedDelay: Duration(milliseconds: 350)));
+    _scrollActivity =
+        ScrollActivityNotifier(idleDebounce: const Duration(milliseconds: 200));
+    _store = ItemStore(
+        pageSize: 50,
+        totalLimit: 20000,
+        repository:
+            const ItemRepository(simulatedDelay: Duration(milliseconds: 350)));
     _jankAggregator = _FrameJankAggregator(label: 'Optimized');
     _jankAggregator.start();
     unawaited(_store.loadInitial());
 
     _controller.addListener(() {
       _loadMoreDebounce?.cancel();
-      _loadMoreDebounce = Timer(const Duration(milliseconds: 120), _maybeLoadMore);
+      _loadMoreDebounce =
+          Timer(const Duration(milliseconds: 120), _maybeLoadMore);
     });
   }
 
@@ -204,11 +209,13 @@ class _OptimizedListPageState extends State<OptimizedListPage> {
                 child: AnimatedBuilder(
                   animation: _store,
                   builder: (context, _) {
-                    final text = 'items=${_store.items.length}  loading=${_store.isLoading}  hasMore=${_store.hasMore}';
+                    final text =
+                        'items=${_store.items.length}  loading=${_store.isLoading}  hasMore=${_store.hasMore}';
                     return Container(
                       alignment: Alignment.centerLeft,
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
                       color: theme.colorScheme.surfaceContainerHighest,
                       child: Text(text),
                     );
@@ -251,7 +258,8 @@ class _OptimizedListPageState extends State<OptimizedListPage> {
                         item: model,
                         isScrollingListenable: _scrollActivity.isScrolling,
                         likedListenable: likedNotifier,
-                        onToggleLiked: () => likedNotifier.value = !likedNotifier.value,
+                        onToggleLiked: () =>
+                            likedNotifier.value = !likedNotifier.value,
                       );
                     },
                     childCount: items.length + 1,

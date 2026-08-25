@@ -46,7 +46,8 @@ class _AvatarDemoFourLayersPageState extends State<AvatarDemoFourLayersPage> {
 
     try {
       final profile = await _getUserProfileUseCase();
-      debugPrint('[展示层] _loadUserProfile -> 收到结果 name=${profile.name}, id=${profile.id}');
+      debugPrint(
+          '[展示层] _loadUserProfile -> 收到结果 name=${profile.name}, id=${profile.id}');
 
       if (!mounted) {
         return;

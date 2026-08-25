@@ -17,48 +17,38 @@ class OptimizedListItem extends StatelessWidget {
     required this.likedListenable,
     this.onToggleLiked,
   });
-  
-  @override
 
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return RepaintBoundary(
-      child:Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: DecoratedBox(
-         decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child:Row(
-              children: [
-                _Thumb(
-                  id: item.id,
-                  url: item.thumbUrl,
-                  isScrollingListenable: isScrollingListenable,
+        child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _Texts(
-                    title: item.title,
-                    subtitle: item.subtitle,
-                  ),
-                ),
-                _Actions(
-                  likedListenable: likedListenable,
-                  onToggleLiked: onToggleLiked ?? () {},
-                ),
-              ]
-                
-            )
-          )
-        )
-        
-      )
-    );
-      
+                child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(children: [
+                      _Thumb(
+                        id: item.id,
+                        url: item.thumbUrl,
+                        isScrollingListenable: isScrollingListenable,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _Texts(
+                          title: item.title,
+                          subtitle: item.subtitle,
+                        ),
+                      ),
+                      _Actions(
+                        likedListenable: likedListenable,
+                        onToggleLiked: onToggleLiked ?? () {},
+                      ),
+                    ])))));
   }
 }
 

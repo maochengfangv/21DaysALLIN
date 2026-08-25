@@ -15,16 +15,16 @@ class BaselineListPage extends StatefulWidget {
 }
 
 class _BaselineListPageState extends State<BaselineListPage> {
- static const int kItemCount = 200000;
+  static const int kItemCount = 200000;
 
- final Random _random = Random(42);
+  final Random _random = Random(42);
 
- int _tick = 0;
- int _highlightId = 0;
+  int _tick = 0;
+  int _highlightId = 0;
 
- Timer? _timer;
+  Timer? _timer;
 
- @override
+  @override
   void initState() {
     super.initState();
 
@@ -44,7 +44,7 @@ class _BaselineListPageState extends State<BaselineListPage> {
     super.dispose();
   }
 
- void _toggleHighlight(int id) {
+  void _toggleHighlight(int id) {
     setState(() {
       _highlightId = id;
     });
@@ -54,34 +54,33 @@ class _BaselineListPageState extends State<BaselineListPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Baseline（未优化） tick=$_tick'),
-      actions: [
-       ValueListenableBuilder<bool>(
-          valueListenable: performanceOverlayEnabled,
-          builder: (context, enabled, _) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                 const Text('Overlay'),
-                  Switch(
-                    value: enabled,
-                    onChanged: (value) {
-                      performanceOverlayEnabled.value = value;
-                    },
+        appBar: AppBar(
+          title: Text('Baseline（未优化） tick=$_tick'),
+          actions: [
+            ValueListenableBuilder<bool>(
+              valueListenable: performanceOverlayEnabled,
+              builder: (context, enabled, _) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      const Text('Overlay'),
+                      Switch(
+                        value: enabled,
+                        onChanged: (value) {
+                          performanceOverlayEnabled.value = value;
+                        },
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              );
-          },
+                );
+              },
+            ),
+          ],
         ),
-      ],
-      ),
-      body: Column(
-        children: [
+        body: Column(children: [
           Material(
-            color:  theme.colorScheme.surfaceContainerHighest,
+            color: theme.colorScheme.surfaceContainerHighest,
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Text(
@@ -90,12 +89,11 @@ class _BaselineListPageState extends State<BaselineListPage> {
               ),
             ),
           ),
-
           Expanded(
             child: ListView.builder(
               itemCount: kItemCount,
               itemBuilder: (context, index) {
-                 final highlight = index == _highlightId;
+                final highlight = index == _highlightId;
                 return BaselineListItem(
                   key: ValueKey<int>(index),
                   id: index,
@@ -105,8 +103,6 @@ class _BaselineListPageState extends State<BaselineListPage> {
               },
             ),
           ),
-        ]
-      )
-    );
+        ]));
   }
 }

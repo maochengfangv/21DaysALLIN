@@ -33,5 +33,4 @@ class MockAiChatRepositoryImpl implements AiChatRepository {
    return sseChatDataSource.streamReply(userInput: userInput, assistantMessageId: assistantMessageId);
   }
 
-  
 }

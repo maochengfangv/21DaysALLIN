@@ -4,31 +4,30 @@ sealed class ChatGenerationState {
   final String? assistantMessageId;
 
   bool get isInFlight => switch (this) {
-     IdleState() ||
+        IdleState() ||
         CompletedState() ||
         CanceledState() ||
         FailedState() =>
           false,
         PreparingState() || StreamingState() || StoppingState() => true,
-  };
+      };
 
   bool get canSend => !isInFlight;
 
   bool get canStop => switch (this) {
-    PreparingState() || StreamingState() || StoppingState() => true,
-    _ => false,
-  };
+        PreparingState() || StreamingState() || StoppingState() => true,
+        _ => false,
+      };
 
   String get label => switch (this) {
-
-      IdleState() => 'SSE 空闲',
-      PreparingState() => 'SSE 准备中',
-      StreamingState() => 'SSE 输出中',
-      StoppingState() => 'SSE 停止中',
-      CompletedState() => 'SSE 已完成',
-      CanceledState() => 'SSE 已取消',
-      FailedState() => 'SSE 失败',
-  };
+        IdleState() => 'SSE 空闲',
+        PreparingState() => 'SSE 准备中',
+        StreamingState() => 'SSE 输出中',
+        StoppingState() => 'SSE 停止中',
+        CompletedState() => 'SSE 已完成',
+        CanceledState() => 'SSE 已取消',
+        FailedState() => 'SSE 失败',
+      };
 }
 
 final class IdleState extends ChatGenerationState {
