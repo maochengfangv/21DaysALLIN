@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../application/ai_chat_controller.dart';
 import '../application/presentation_support/input_bar_change_notifier.dart';
 import '../application/presentation_support/message_list_change_notifier_test.dart';
+import '../domain/entities/selected_image_attachment.dart';
 import 'widgets/ai_chat_input_bar.dart';
 import 'widgets/ai_chat_message_bubble.dart';
 import 'widgets/ai_chat_voice_input_sheet.dart';
@@ -211,6 +212,7 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
                     );
                   },
                   onOpenVoiceInput: _handleOpenVoiceInput,
+                  onDeletedSelectedImage: _handleDeletedSelectedImage,
                 );
               },
             ),
@@ -218,5 +220,11 @@ class _AiChatDemoPageState extends State<AiChatDemoPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleDeletedSelectedImage(
+    SelectedImageAttachment image,
+  ) async {
+    widget.controller.removeSelectedImage(image.localPath);
   }
 }

@@ -144,6 +144,9 @@ class AiChatController extends ChangeNotifier {
 
   void resetVoiceInput() => _coordinator.resetVoiceInput();
 
+  void removeSelectedImage(String localPath) =>
+      _coordinator.removeSelectedImage(localPath);
+
   @override
   void dispose() {
     _coordinator.removeListener(_forwardNotifications);

@@ -15,6 +15,7 @@ class AiChatInputBar extends StatelessWidget {
     required this.onStop,
     required this.onPickAlbum,
     required this.onOpenVoiceInput,
+    required this.onDeletedSelectedImage,
     super.key,
   });
   final TextEditingController inputController;
@@ -25,6 +26,8 @@ class AiChatInputBar extends StatelessWidget {
   final VoidCallback onStop;
   final Future<void> Function() onPickAlbum;
   final Future<void> Function() onOpenVoiceInput;
+  final Future<void> Function(SelectedImageAttachment image)
+      onDeletedSelectedImage;
 
   void _showDevelopingToast(BuildContext context, String featureName) {
     ScaffoldMessenger.of(context)
@@ -82,6 +85,7 @@ class AiChatInputBar extends StatelessWidget {
                         _ThumbnailImage(
                           key: ValueKey(image.localPath),
                           image: image,
+                          onDelete: (img) => onDeletedSelectedImage(img),
                         ),
                     ],
                   ),
@@ -130,9 +134,10 @@ class _ThumbnailImage extends StatefulWidget {
   const _ThumbnailImage({
     required super.key,
     required this.image,
+    required this.onDelete,
   });
-
   final SelectedImageAttachment image;
+  final Future<void> Function(SelectedImageAttachment image) onDelete;
 
   @override
   State<_ThumbnailImage> createState() => _ThumbnailImageState();
@@ -153,6 +158,7 @@ class _ThumbnailImageState extends State<_ThumbnailImage> {
   @override
   Widget build(BuildContext context) {
     final path = widget.image.localPath;
+
     return Container(
       width: 72,
       height: 72,
@@ -162,38 +168,63 @@ class _ThumbnailImageState extends State<_ThumbnailImage> {
         borderRadius: BorderRadius.circular(12),
         color: Colors.grey.shade200,
       ),
-      child: Image(
-        // ===== 🔴 Bug3修复：ResizeImage显式包裹，100%强制下采样解码 =====
-        // 显示尺寸72x72 → 解码尺寸144x144(2x屏) → 解码像素降为原图的 1/(14*10)=1/140
-        image: ResizeImage(
-          FileImage(File(path)),
-          width: 144,
-          height: 144,
-          allowUpscaling: false,
-        ),
-        fit: BoxFit.cover,
-        // ===== Check-images-bug 关键：frameBuilder 跟踪图片解码完成时机 =====
-        frameBuilder: (
-          BuildContext context,
-          Widget child,
-          int? frame,
-          bool wasSynchronouslyLoaded,
-        ) {
-          if (frame != null) {
-            final tDone = DateTime.now().millisecondsSinceEpoch;
-            final decodeCost = tDone - _tCreate.millisecondsSinceEpoch;
-            debugPrint(
-              '[Check-images-bug][⑨-Thumb] ✅ 单张解码完成 path=$path，总耗时=${decodeCost}ms（initState→frameBuilder第1帧）',
-            );
-          }
-          return child;
-        },
-        errorBuilder: (context, error, stackTrace) {
-          debugPrint(
-            '[Check-images-bug][⑨-Thumb] ❌ 解码失败 path=$path，error=$error',
-          );
-          return const Icon(Icons.broken_image_outlined, color: Colors.red);
-        },
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Image(
+              image: ResizeImage(
+                FileImage(File(path)),
+                width: 144,
+                height: 144,
+              ),
+              fit: BoxFit.cover,
+              frameBuilder: (
+                BuildContext context,
+                Widget child,
+                int? frame,
+                bool wasSynchronouslyLoaded,
+              ) {
+                if (frame != null) {
+                  final tDone = DateTime.now().millisecondsSinceEpoch;
+                  final decodeCost = tDone - _tCreate.millisecondsSinceEpoch;
+                  debugPrint(
+                    '[Check-images-bug][⑨-Thumb] ✅ 单张解码完成 path=$path，总耗时=${decodeCost}ms（initState→frameBuilder第1帧）',
+                  );
+                }
+                return child;
+              },
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint(
+                  '[Check-images-bug][⑨-Thumb] ❌ 解码失败 path=$path，error=$error',
+                );
+                return const Icon(
+                  Icons.broken_image_outlined,
+                  color: Colors.red,
+                );
+              },
+            ),
+          ),
+          Positioned(
+            top: 2,
+            right: 2,
+            child: GestureDetector(
+              onTap: () => widget.onDelete(widget.image),
+              child: Container(
+                width: 20,
+                height: 20,
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close,
+                  size: 14,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
