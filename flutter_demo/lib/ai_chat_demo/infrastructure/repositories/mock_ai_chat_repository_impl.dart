@@ -5,32 +5,35 @@ import '../datasources/mock_sse_chat_data_source.dart';
 import '../datasources/mock_websocket_event_data_source.dart';
 
 class MockAiChatRepositoryImpl implements AiChatRepository {
-
-  final MockSseChatDataSource sseChatDataSource;
-  final MockWebSocketEventDataSource websocketEventDataSource;
-
   const MockAiChatRepositoryImpl({
     required this.sseChatDataSource,
     required this.websocketEventDataSource,
   });
 
+  final MockSseChatDataSource sseChatDataSource;
+  final MockWebSocketEventDataSource websocketEventDataSource;
+
   @override
-  void dispose() {
-  }
+  void dispose() {}
 
   @override
   Stream<SessionRealtimeEvent> observeSessionEvents() {
-   return websocketEventDataSource.observeEvents();
+    return websocketEventDataSource.observeEvents();
   }
 
   @override
   Future<void> stopReply(String assistantMessageId) {
-   return sseChatDataSource.stopReply(assistantMessageId);
+    return sseChatDataSource.stopReply(assistantMessageId);
   }
 
   @override
-  Stream<ReplyStreamEvent> streamReply({required String userInput, required String assistantMessageId}) {
-   return sseChatDataSource.streamReply(userInput: userInput, assistantMessageId: assistantMessageId);
+  Stream<ReplyStreamEvent> streamReply({
+    required String userInput,
+    required String assistantMessageId,
+  }) {
+    return sseChatDataSource.streamReply(
+      userInput: userInput,
+      assistantMessageId: assistantMessageId,
+    );
   }
-
 }
