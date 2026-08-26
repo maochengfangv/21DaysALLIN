@@ -10,6 +10,10 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  # ===== custom_lint 插件：团队级 Flutter 架构约束 4 条规则 =====
+  plugins:
+    - custom_lint
+
   # 全局错误级别配置，将常见问题升级为错误或警告
   errors:
     # 空安全相关：强制处理
@@ -31,6 +35,14 @@ analyzer:
 
     # 弃用 API 使用
     deprecated_member_use_from_same_package: warning
+
+    # ===== custom_lint 4 条规则级别（P0=error 阻断CI，P1=warning 提醒）=====
+    # P0 级：内存泄漏 + 事件风暴风险（CI/CD 门禁失败）
+    must_dispose_change_notifier_with_listener: error
+    no_new_listenable_in_animated_builder_param: error
+    dispose_all_listenable_fields_in_state: error
+    # P1 级：长生命周期类对称检查（警告级，可在 PR Comment 中查看）
+    prefer_symmetric_add_remove_listener: warning
 
   # 排除不需要静态检查的文件/目录
   exclude:
@@ -112,6 +124,23 @@ linter:
     hash_and_equals: true
     no_duplicate_case_values: true
     valid_regexps: true
+
+# ============================================================
+# custom_lint 配置：团队级 Flutter 架构约束 4 条规则
+# ============================================================
+# 详细说明见 packages/flutter_architecture_lints/lib/flutter_architecture_lints.dart
+# P0 级（error，阻断 CI/CD）：
+#   - must_dispose_change_notifier_with_listener：构造函数 addListener ↔ dispose removeListener 对称
+#   - no_new_listenable_in_animated_builder_param：禁止 AnimatedBuilder 参数内 new Listenable
+#   - dispose_all_listenable_fields_in_state：State Listenable 字段必须 dispose
+# P1 级（warning，PR Comment 提醒）：
+#   - prefer_symmetric_add_remove_listener：长生命周期类 add/remove 配对
+custom_lint:
+  rules:
+    - must_dispose_change_notifier_with_listener
+    - no_new_listenable_in_animated_builder_param
+    - dispose_all_listenable_fields_in_state
+    - prefer_symmetric_add_remove_listener
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

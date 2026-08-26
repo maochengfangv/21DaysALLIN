@@ -20,6 +20,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  # ===== 团队架构 custom_lint 规则集 =====
+  custom_lint: ^0.6.4
+  flutter_architecture_lints:
+    path: packages/flutter_architecture_lints
 
 flutter:
   uses-material-design: true
