@@ -21,8 +21,6 @@ class _AnimationTokens {
 }
 
 class AppMotionScope extends InheritedWidget {
-  final bool reduceMotion;
-  final bool criticalPath;
 
   const AppMotionScope({
     super.key,
@@ -30,6 +28,8 @@ class AppMotionScope extends InheritedWidget {
     required this.criticalPath,
     required super.child,
   });
+  final bool reduceMotion;
+  final bool criticalPath;
 
   static AppMotionScope? maybeOf(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<AppMotionScope>();
@@ -43,9 +43,9 @@ class AppMotionScope extends InheritedWidget {
 }
 
 class IndustryAnimationControlsPage extends StatelessWidget {
-  static const routeName = '/industry-animation-controls';
 
   const IndustryAnimationControlsPage({super.key});
+  static const routeName = '/industry-animation-controls';
 
   @override
   Widget build(BuildContext context) {
@@ -114,13 +114,13 @@ class _IndustryAnimationControlsViewState
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _SectionCard(
+          const _SectionCard(
             title: '为什么这些控件是 P0',
             subtitle: '交互反馈、状态切换、弹层、通知条、展开收起、共享元素，基本覆盖内容型与商城型 App 的高频动画场景。',
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: const [
+              children: [
                 _TagChip(label: '交互反馈'),
                 _TagChip(label: '状态过渡'),
                 _TagChip(label: '弹层转场'),
@@ -154,7 +154,7 @@ class _IndustryAnimationControlsViewState
                     ),
                     FilterChip(
                       label: Text(
-                          systemReduceMotion ? '系统减少动态效果: 开' : '系统减少动态效果: 关'),
+                          systemReduceMotion ? '系统减少动态效果: 开' : '系统减少动态效果: 关',),
                       selected: systemReduceMotion,
                       onSelected: null,
                     ),
@@ -347,15 +347,15 @@ enum _DemoViewState {
 }
 
 class _SectionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Widget child;
 
   const _SectionCard({
     required this.title,
     required this.subtitle,
     required this.child,
   });
+  final String title;
+  final String subtitle;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -389,9 +389,9 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _TagChip extends StatelessWidget {
-  final String label;
 
   const _TagChip({required this.label});
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -409,10 +409,10 @@ class _TagChip extends StatelessWidget {
 }
 
 class AppPressable extends StatefulWidget {
-  final VoidCallback? onTap;
-  final Widget child;
 
   const AppPressable({super.key, this.onTap, required this.child});
+  final VoidCallback? onTap;
+  final Widget child;
 
   @override
   State<AppPressable> createState() => _AppPressableState();
@@ -450,7 +450,7 @@ class _AppPressableState extends State<AppPressable> {
               BoxShadow(
                   color: Colors.black.withValues(alpha: _pressed ? 0.06 : 0.12),
                   blurRadius: _pressed ? 10 : 20,
-                  offset: Offset(0, _pressed ? 4 : 10))
+                  offset: Offset(0, _pressed ? 4 : 10),),
             ],
           ),
           child: widget.child,
@@ -461,9 +461,9 @@ class _AppPressableState extends State<AppPressable> {
 }
 
 class AppStateSwitcher extends StatelessWidget {
-  final Widget child;
 
   const AppStateSwitcher({super.key, required this.child});
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -476,7 +476,7 @@ class AppStateSwitcher extends StatelessWidget {
       transitionBuilder: (child, animation) => FadeTransition(
         opacity: animation,
         child: SizeTransition(
-            sizeFactor: animation, axisAlignment: -1, child: child),
+            sizeFactor: animation, axisAlignment: -1, child: child,),
       ),
       child: child,
     );
@@ -484,15 +484,15 @@ class AppStateSwitcher extends StatelessWidget {
 }
 
 class AppNoticeBanner extends StatelessWidget {
-  final bool visible;
-  final IconData icon;
-  final String message;
 
   const AppNoticeBanner(
       {super.key,
       required this.visible,
       required this.icon,
       required this.message});
+  final bool visible;
+  final IconData icon;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -504,15 +504,15 @@ class AppNoticeBanner extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                   color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(16)),
+                  borderRadius: BorderRadius.circular(16),),
               child: Row(children: [
                 Icon(icon, color: theme.colorScheme.onPrimaryContainer),
                 const SizedBox(width: 10),
                 Expanded(
                     child: Text(message,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onPrimaryContainer)))
-              ]),
+                            color: theme.colorScheme.onPrimaryContainer,),),),
+              ],),
             )
           : const SizedBox.shrink();
     }
@@ -529,15 +529,15 @@ class AppNoticeBanner extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
                 color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(16),),
             child: Row(children: [
               Icon(icon, color: theme.colorScheme.onPrimaryContainer),
               const SizedBox(width: 10),
               Expanded(
                   child: Text(message,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer)))
-            ]),
+                          color: theme.colorScheme.onPrimaryContainer,),),),
+            ],),
           ),
         ),
       ),
@@ -546,10 +546,6 @@ class AppNoticeBanner extends StatelessWidget {
 }
 
 class AppExpandableSection extends StatelessWidget {
-  final bool expanded;
-  final double collapsedHeight;
-  final double expandedHeight;
-  final Widget child;
 
   const AppExpandableSection(
       {super.key,
@@ -557,6 +553,10 @@ class AppExpandableSection extends StatelessWidget {
       required this.collapsedHeight,
       required this.expandedHeight,
       required this.child});
+  final bool expanded;
+  final double collapsedHeight;
+  final double expandedHeight;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -564,7 +564,7 @@ class AppExpandableSection extends StatelessWidget {
     if (reduceMotion) {
       return ConstrainedBox(
         constraints: BoxConstraints(
-            maxHeight: expanded ? expandedHeight : collapsedHeight),
+            maxHeight: expanded ? expandedHeight : collapsedHeight,),
         child: child,
       );
     }
@@ -573,7 +573,7 @@ class AppExpandableSection extends StatelessWidget {
       curve: _AnimationTokens.standardCurve,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-            maxHeight: expanded ? expandedHeight : collapsedHeight),
+            maxHeight: expanded ? expandedHeight : collapsedHeight,),
         child: child,
       ),
     );
@@ -581,12 +581,12 @@ class AppExpandableSection extends StatelessWidget {
 }
 
 class AppHeroCard extends StatelessWidget {
-  final String tag;
-  final VoidCallback onTap;
-  final Widget child;
 
   const AppHeroCard(
       {super.key, required this.tag, required this.onTap, required this.child});
+  final String tag;
+  final VoidCallback onTap;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -600,8 +600,8 @@ class AppHeroCard extends StatelessWidget {
             gradient: const LinearGradient(
                 colors: [Color(0xFF4F46E5), Color(0xFF9333EA)],
                 begin: Alignment.topLeft,
-                end: Alignment.bottomRight),
-            borderRadius: BorderRadius.circular(20)),
+                end: Alignment.bottomRight,),
+            borderRadius: BorderRadius.circular(20),),
         child: child,
       ),
     );
@@ -613,15 +613,15 @@ class AppHeroCard extends StatelessWidget {
 }
 
 class _StatePill extends StatelessWidget {
-  final String text;
-  final bool selected;
-  final VoidCallback onTap;
 
   const _StatePill({
     required this.text,
     required this.selected,
     required this.onTap,
   });
+  final String text;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -634,12 +634,12 @@ class _StatePill extends StatelessWidget {
 }
 
 class _StateView extends StatelessWidget {
-  final _DemoViewState state;
 
   const _StateView({
     super.key,
     required this.state,
   });
+  final _DemoViewState state;
 
   @override
   Widget build(BuildContext context) {
@@ -757,9 +757,9 @@ class _ErrorPanel extends StatelessWidget {
 }
 
 class AppActionSheet extends StatelessWidget {
-  final List<Widget> children;
 
   const AppActionSheet({super.key, required this.children});
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
@@ -771,13 +771,13 @@ class AppActionSheet extends StatelessWidget {
 }
 
 class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
 
   const _ActionTile({
     required this.icon,
     required this.title,
   });
+  final IconData icon;
+  final String title;
 
   @override
   Widget build(BuildContext context) {

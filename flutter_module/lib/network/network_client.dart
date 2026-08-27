@@ -143,9 +143,9 @@ final class NetworkClient {
     try {
       final extra = <String, Object?>{
         'domain': domain,
-        if (cacheOptions != null) 'cacheOptions': cacheOptions,
-        if (retryOptions != null) 'retryOptions': retryOptions,
-        if (timeoutMs != null) 'timeoutMs': timeoutMs,
+        'cacheOptions': ?cacheOptions,
+        'retryOptions': ?retryOptions,
+        'timeoutMs': ?timeoutMs,
         if (retryable) 'retryable': true,
       };
 

@@ -5,10 +5,6 @@ import 'package:flutter/material.dart';
 import '../data/item_model.dart';
 
 class OptimizedListItem extends StatelessWidget {
-  final ItemModel item;
-  final ValueListenable<bool> isScrollingListenable;
-  final ValueListenable<bool> likedListenable;
-  final VoidCallback? onToggleLiked;
 
   const OptimizedListItem({
     super.key,
@@ -17,6 +13,10 @@ class OptimizedListItem extends StatelessWidget {
     required this.likedListenable,
     this.onToggleLiked,
   });
+  final ItemModel item;
+  final ValueListenable<bool> isScrollingListenable;
+  final ValueListenable<bool> likedListenable;
+  final VoidCallback? onToggleLiked;
 
   @override
   Widget build(BuildContext context) {
@@ -48,22 +48,22 @@ class OptimizedListItem extends StatelessWidget {
                         likedListenable: likedListenable,
                         onToggleLiked: onToggleLiked ?? () {},
                       ),
-                    ])))));
+                    ],),),),),);
   }
 }
 
 class _Thumb extends StatelessWidget {
-  static const double _size = 56;
-
-  final int id;
-  final String url;
-  final ValueListenable<bool> isScrollingListenable;
 
   const _Thumb({
     required this.id,
     required this.url,
     required this.isScrollingListenable,
   });
+  static const double _size = 56;
+
+  final int id;
+  final String url;
+  final ValueListenable<bool> isScrollingListenable;
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +123,6 @@ class _Thumb extends StatelessWidget {
                 );
               },
               fit: BoxFit.cover,
-              filterQuality: FilterQuality.low,
             );
           },
         ),
@@ -133,13 +132,13 @@ class _Thumb extends StatelessWidget {
 }
 
 class _Texts extends StatelessWidget {
-  final String title;
-  final String subtitle;
 
   const _Texts({
     required this.title,
     required this.subtitle,
   });
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -157,13 +156,13 @@ class _Texts extends StatelessWidget {
 }
 
 class _Title extends StatelessWidget {
-  final String text;
-  final TextStyle? style;
 
   const _Title({
     required this.text,
     required this.style,
   });
+  final String text;
+  final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
@@ -177,13 +176,13 @@ class _Title extends StatelessWidget {
 }
 
 class _Subtitle extends StatelessWidget {
-  final String text;
-  final TextStyle? style;
 
   const _Subtitle({
     required this.text,
     required this.style,
   });
+  final String text;
+  final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
@@ -197,13 +196,13 @@ class _Subtitle extends StatelessWidget {
 }
 
 class _Actions extends StatelessWidget {
-  final ValueListenable<bool> likedListenable;
-  final VoidCallback onToggleLiked;
 
   const _Actions({
     required this.likedListenable,
     required this.onToggleLiked,
   });
+  final ValueListenable<bool> likedListenable;
+  final VoidCallback onToggleLiked;
 
   @override
   Widget build(BuildContext context) {

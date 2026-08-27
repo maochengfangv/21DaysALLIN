@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 class BaselineListItem extends StatelessWidget {
-  final int id;
-  final bool highlight;
-  final VoidCallback? onToggle;
 
   const BaselineListItem({
     super.key,
@@ -11,6 +8,9 @@ class BaselineListItem extends StatelessWidget {
     this.highlight = false,
     this.onToggle,
   });
+  final int id;
+  final bool highlight;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +24,7 @@ class BaselineListItem extends StatelessWidget {
         opacity: highlight ? 1 : 0.92,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          child: Container(
+          child: ColoredBox(
             color: bg ?? theme.colorScheme.surfaceContainerHighest,
             child: Padding(
               padding: const EdgeInsets.all(12),

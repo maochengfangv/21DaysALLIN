@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
 class AiChatInfoCard extends StatelessWidget {
-  final String title;
-  final List<String> items;
 
   const AiChatInfoCard({
     super.key,
     required this.title,
     required this.items,
   });
+  final String title;
+  final List<String> items;
 
   @override
   Widget build(BuildContext context) {

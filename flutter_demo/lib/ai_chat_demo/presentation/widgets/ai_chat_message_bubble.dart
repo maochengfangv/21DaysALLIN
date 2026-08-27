@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../application/presentation_support/message_bubble_presenter.dart';
 import '../../domain/entities/chat_message.dart';
-import '../../domain/entities/message_content_format.dart';
 
 class AiChatMessageBubble extends StatelessWidget {
-
   const AiChatMessageBubble({
-    super.key,
     required this.message,
+    super.key,
   });
   final ChatMessage message;
 
   @override
   Widget build(BuildContext context) {
+    // 系统消息居中展示（时间/提示类）
     if (message.role == ChatRole.system) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
@@ -35,13 +35,13 @@ class AiChatMessageBubble extends StatelessWidget {
       );
     }
 
-    final isUser = message.role == ChatRole.user;
+    // === Presentation 层只做「取值 + 渲染」，判断逻辑全下沉到 Presenter ===
+    final presenter = MessageBubblePresenter(context);
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final (displayText, bubbleColor, statusHint) = _resolveAppearance(
-      context,
-      isUser,
+    final (displayText, bubbleColor, statusHint) = presenter.resolveAppearance(
+      message: message,
     );
+    final isUser = message.role == ChatRole.user;
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -52,21 +52,20 @@ class AiChatMessageBubble extends StatelessWidget {
         decoration: BoxDecoration(
           color: bubbleColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _resolveBorderColor(colorScheme),
-          ),
+          border:
+              Border.all(color: presenter.resolveBorderColor(message: message)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildContent(context, displayText),
+            _buildContent(context, presenter, displayText),
             if (statusHint != null) ...[
               const SizedBox(height: 6),
               Text(
                 statusHint,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: _resolveStatusHintColor(colorScheme),
+                  color: presenter.resolveStatusHintColor(message: message),
                 ),
               ),
             ],
@@ -76,53 +75,13 @@ class AiChatMessageBubble extends StatelessWidget {
     );
   }
 
-  (String displayText, Color bubbleColor, String? statusHint)
-      _resolveAppearance(
+  /// 纯渲染分支：Markdown / PlainText
+  Widget _buildContent(
     BuildContext context,
-    bool isUser,
+    MessageBubblePresenter presenter,
+    String displayText,
   ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final baseUserColor = colorScheme.primaryContainer;
-    final baseAssistantColor = colorScheme.surfaceContainerHighest;
-
-    if (isUser) {
-      return (message.content, baseUserColor, null);
-    }
-
-    switch (message.status) {
-      case ChatMessageStatus.ready:
-        return (
-          message.content.isEmpty ? '...' : message.content,
-          baseAssistantColor,
-          null,
-        );
-      case ChatMessageStatus.pending:
-        return ('模型思考中...', baseAssistantColor, '等待模型返回首包');
-      case ChatMessageStatus.streaming:
-        return (
-          message.content.isEmpty ? '...' : message.content,
-          baseAssistantColor,
-          '正在流式输出',
-        );
-      case ChatMessageStatus.completed:
-        return (message.content, baseAssistantColor, null);
-      case ChatMessageStatus.canceled:
-        return (
-          message.content.isEmpty ? '本次回答已取消' : message.content,
-          colorScheme.surfaceContainerHighest,
-          message.errorMessage ?? '用户已停止生成',
-        );
-      case ChatMessageStatus.failed:
-        return (
-          message.content.isEmpty ? '生成失败，请重试' : message.content,
-          colorScheme.errorContainer,
-          message.errorMessage ?? '生成失败',
-        );
-    }
-  }
-
-  Widget _buildContent(BuildContext context, String displayText) {
-    if (message.contentFormat == MessageContentFormat.markdown) {
+    if (presenter.isMarkdown(message)) {
       return MarkdownBody(
         data: displayText,
         selectable: true,
@@ -132,36 +91,24 @@ class AiChatMessageBubble extends StatelessWidget {
     return Text(displayText);
   }
 
+  /// 链接跳转：统一错误提示，不打印任何日志
   Future<void> _handleTapLink(BuildContext context, String? href) async {
-    debugPrint('[_handleTapLink]  -> $href');
-
-    if (href == null || href.isEmpty) {
-      return;
-    }
-
+    if (href == null || href.isEmpty) return;
     final uri = Uri.tryParse(href);
     if (uri == null) {
       _showLinkToast(context, '链接地址无效');
       return;
     }
-
     try {
       final canOpen = await canLaunchUrl(uri);
       if (!canOpen) {
-        if (context.mounted) {
-          _showLinkToast(context, '暂时无法打开链接');
-        }
+        if (context.mounted) _showLinkToast(context, '暂时无法打开链接');
         return;
       }
-
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened && context.mounted) {
-        _showLinkToast(context, '打开链接失败');
-      }
-    } catch (error) {
-      if (context.mounted) {
-        _showLinkToast(context, '打开链接失败，请稍后重试');
-      }
+      if (!opened && context.mounted) _showLinkToast(context, '打开链接失败');
+    } catch (_) {
+      if (context.mounted) _showLinkToast(context, '打开链接失败，请稍后重试');
     }
   }
 
@@ -174,43 +121,5 @@ class AiChatMessageBubble extends StatelessWidget {
           behavior: SnackBarBehavior.floating,
         ),
       );
-  }
-
-  Color _resolveBorderColor(ColorScheme colorScheme) {
-    switch (message.role) {
-      case ChatRole.system:
-        return Colors.transparent;
-      case ChatRole.user:
-        return Colors.transparent;
-      case ChatRole.assistant:
-        switch (message.status) {
-          case ChatMessageStatus.failed:
-            return colorScheme.error.withValues(alpha: 0.4);
-          case ChatMessageStatus.canceled:
-            return colorScheme.outlineVariant;
-          case ChatMessageStatus.streaming:
-            return colorScheme.primary.withValues(alpha: 0.35);
-          case ChatMessageStatus.pending:
-            return colorScheme.primary.withValues(alpha: 0.2);
-          case ChatMessageStatus.ready:
-          case ChatMessageStatus.completed:
-            return Colors.transparent;
-        }
-    }
-  }
-
-  Color _resolveStatusHintColor(ColorScheme colorScheme) {
-    switch (message.status) {
-      case ChatMessageStatus.failed:
-        return colorScheme.onErrorContainer;
-      case ChatMessageStatus.canceled:
-        return colorScheme.onSurfaceVariant;
-      case ChatMessageStatus.streaming:
-      case ChatMessageStatus.pending:
-        return colorScheme.primary;
-      case ChatMessageStatus.ready:
-      case ChatMessageStatus.completed:
-        return colorScheme.onSurfaceVariant;
-    }
   }
 }

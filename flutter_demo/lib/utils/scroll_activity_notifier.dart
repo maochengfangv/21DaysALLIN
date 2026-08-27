@@ -3,12 +3,12 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 class ScrollActivityNotifier {
-  final ValueNotifier<bool> isScrolling = ValueNotifier<bool>(false);
-  final Duration idleDebounce;
-  Timer? _idleTimer;
   ScrollActivityNotifier({
     this.idleDebounce = const Duration(milliseconds: 180),
   });
+  final ValueNotifier<bool> isScrolling = ValueNotifier<bool>(false);
+  final Duration idleDebounce;
+  Timer? _idleTimer;
 
   bool handleScrollNotification(ScrollNotification notification) {
     if (notification is ScrollStartNotification) {

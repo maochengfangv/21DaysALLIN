@@ -3,9 +3,9 @@ import '../domain/entities/reply_stream_event.dart';
 import '../domain/repositories/ai_chat_repository.dart';
 
 class SendChatMessageUseCase {
-  final AiChatRepository repository;
 
   SendChatMessageUseCase(this.repository);
+  final AiChatRepository repository;
 
   Stream<ReplyStreamEvent> call({
     required String userInput,

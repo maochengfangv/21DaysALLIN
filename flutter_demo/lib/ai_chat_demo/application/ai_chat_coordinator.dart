@@ -56,14 +56,17 @@ class AiChatCoordinator extends ChangeNotifier {
     }
   }
 
-  /// 消息状态变化：发送开始后清空附件选择
+  /// 🔴 核心修复：消息状态变化 → **无条件**向上转发通知 + 业务副作用
+  /// 原 Bug：只有 Preparing 分支有逻辑，streaming 期间 notifyListeners 完全丢失
   void _onMessageStateChanged() {
-    // 当idel/completed进入Preparing时 意味着消息刚提交
+    // 副作用：idel/completed → Preparing 时清空已选附件（发送流程触发）
     if (messageController.generationState is PreparingState) {
       if (attachmentController.hasSelection) {
         attachmentController.clearSelection();
       }
     }
+    // ✅ 必须无条件转发！每次 ReplyDelta 追加内容都要经过这里通知上层 UI
+    notifyListeners();
   }
 
   // 【Facade 层】对UI层暴露的统一API（保持原AiChatController接口兼容）

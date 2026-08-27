@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 
 const int _checksumMod = 1000000007;
 const String _networkSnippet =
-    "final response = await http.get(Uri.parse(url));";
+    'final response = await http.get(Uri.parse(url));';
 const String _databaseSnippet =
     "final rows = await database.query('messages');";
 const String _fileSnippet =
@@ -95,9 +95,9 @@ void _lifecycleHeartbeatWorker(SendPort sendPort) {
 }
 
 class ThreadDemoPage extends StatefulWidget {
-  static const routeName = '/thread-demo';
 
   const ThreadDemoPage({super.key});
+  static const routeName = '/thread-demo';
 
   @override
   State<ThreadDemoPage> createState() => _ThreadDemoPageState();
@@ -659,7 +659,7 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                     Text('I/O 密集型任务', style: theme.textTheme.titleMedium),
                     const SizedBox(height: 8),
                     const Text(
-                        '网络请求、数据库、文件读取通常是等待外部资源返回，核心是使用异步 API 让主 isolate 继续处理动画与交互，而不是为这类任务优先创建 isolate。'),
+                        '网络请求、数据库、文件读取通常是等待外部资源返回，核心是使用异步 API 让主 isolate 继续处理动画与交互，而不是为这类任务优先创建 isolate。',),
                     const SizedBox(height: 12),
                     Text('最近执行：$_lastIoType'),
                     Text(_ioStatus),
@@ -672,21 +672,21 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                           onPressed: _ioRunning
                               ? null
                               : () => unawaited(_runIoTask(
-                                  '网络请求', const Duration(seconds: 2))),
+                                  '网络请求', const Duration(seconds: 2),),),
                           child: const Text('模拟网络请求'),
                         ),
                         FilledButton.tonal(
                           onPressed: _ioRunning
                               ? null
                               : () => unawaited(_runIoTask(
-                                  '数据库查询', const Duration(milliseconds: 1600))),
+                                  '数据库查询', const Duration(milliseconds: 1600),),),
                           child: const Text('模拟数据库查询'),
                         ),
                         FilledButton.tonal(
                           onPressed: _ioRunning
                               ? null
                               : () => unawaited(_runIoTask(
-                                  '文件读取', const Duration(milliseconds: 1200))),
+                                  '文件读取', const Duration(milliseconds: 1200),),),
                           child: const Text('模拟文件读取'),
                         ),
                       ],

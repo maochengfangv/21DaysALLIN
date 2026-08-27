@@ -8,7 +8,7 @@ final class AppEnv {
   final AppFlavor flavor;
 
   static AppFlavor? overrideFlavor;
-  static late final AppEnv current = AppEnv._(_resolveFlavor());
+  static final AppEnv current = AppEnv._(_resolveFlavor());
 
   static AppFlavor _resolveFlavor() {
     final override = overrideFlavor;

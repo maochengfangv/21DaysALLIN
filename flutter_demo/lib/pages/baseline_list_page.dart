@@ -7,8 +7,8 @@ import '../main.dart';
 import '../widgets/list_item_baseline.dart';
 
 class BaselineListPage extends StatefulWidget {
-  static const routeName = '/baseline';
   const BaselineListPage({super.key});
+  static const routeName = '/baseline';
 
   @override
   State<BaselineListPage> createState() => _BaselineListPageState();
@@ -103,6 +103,6 @@ class _BaselineListPageState extends State<BaselineListPage> {
               },
             ),
           ),
-        ]));
+        ],),);
   }
 }

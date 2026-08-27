@@ -3,15 +3,15 @@ import 'package:flutter/foundation.dart';
 import '../../domain/entities/user_profile.dart';
 
 class UserProfileDto {
-  final int? userId;
-  final String? nickName;
-  final String? avatarUrl;
 
   const UserProfileDto({
     this.userId,
     this.nickName,
     this.avatarUrl,
   });
+  final int? userId;
+  final String? nickName;
+  final String? avatarUrl;
 
   UserProfile toEntity() {
     debugPrint('[基建层] UserProfileDto.toEntity -> 开始 DTO 转 Entity');
@@ -25,7 +25,7 @@ class UserProfileDto {
       avatarUrl: avatarUrl ?? 'https://i.pravatar.cc/150?img=12',
     );
     debugPrint(
-        '[基建层] UserProfileDto.toEntity -> 转换完成 id=${entity.id}, name=${entity.name}');
+        '[基建层] UserProfileDto.toEntity -> 转换完成 id=${entity.id}, name=${entity.name}',);
     return entity;
   }
 }

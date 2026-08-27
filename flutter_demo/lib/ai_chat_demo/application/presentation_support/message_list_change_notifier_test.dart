@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../domain/entities/chat_message.dart';
 import '../ai_chat_controller.dart';
 
 /// 【展示层支持 · Application层】
@@ -22,17 +23,25 @@ class MessageListChangeNotifier extends ChangeNotifier {
   int _lastMessagesLen = -1;
   int _lastStepsLen = -1;
   String _lastGenRuntimeType = '';
+  int _lastAssistantContentLen = -1;
 
   void _onChange() {
     final mLen = _source.messages.length;
     final sLen = _source.replySteps.length;
     final gType = _source.generationState.runtimeType.toString();
+    // 🔴 流式输出关键修复：计算所有 assistant 消息的内容总长度
+    // 每次 ReplyDelta 追加内容时，此值都会变化，确保打字机效果触发 UI 重建
+    final assistantContentLen = _source.messages
+        .where((e) => e.role == ChatRole.assistant)
+        .fold<int>(0, (sum, e) => sum + e.content.length);
     if (mLen != _lastMessagesLen ||
         sLen != _lastStepsLen ||
-        gType != _lastGenRuntimeType) {
+        gType != _lastGenRuntimeType ||
+        assistantContentLen != _lastAssistantContentLen) {
       _lastMessagesLen = mLen;
       _lastStepsLen = sLen;
       _lastGenRuntimeType = gType;
+      _lastAssistantContentLen = assistantContentLen;
       notifyListeners();
     }
   }

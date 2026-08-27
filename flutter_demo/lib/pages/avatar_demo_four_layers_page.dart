@@ -6,9 +6,9 @@ import '../avatar_demo/infrastructure/datasources/mock_user_profile_remote_data_
 import '../avatar_demo/infrastructure/repositories/user_profile_repository_impl.dart';
 
 class AvatarDemoFourLayersPage extends StatefulWidget {
-  static const String routeName = '/avatar-demo-four-layers';
 
   const AvatarDemoFourLayersPage({super.key});
+  static const String routeName = '/avatar-demo-four-layers';
 
   @override
   State<AvatarDemoFourLayersPage> createState() =>
@@ -27,13 +27,13 @@ class _AvatarDemoFourLayersPageState extends State<AvatarDemoFourLayersPage> {
     super.initState();
     debugPrint('[展示层] initState -> 开始组装四层依赖');
 
-    _getUserProfileUseCase = GetUserProfileUseCase(
-      repository: const UserProfileRepositoryImpl(
+    _getUserProfileUseCase = const GetUserProfileUseCase(
+      repository: UserProfileRepositoryImpl(
         remoteDataSource: MockUserProfileRemoteDataSource(),
       ),
     );
 
-    debugPrint('[展示层] initState -> 准备发起获取用户头像');
+    debugPrint('[展示层] initState -> 准备发起获取用户JSOn头像');
     _loadUserProfile();
   }
 
@@ -47,7 +47,7 @@ class _AvatarDemoFourLayersPageState extends State<AvatarDemoFourLayersPage> {
     try {
       final profile = await _getUserProfileUseCase();
       debugPrint(
-          '[展示层] _loadUserProfile -> 收到结果 name=${profile.name}, id=${profile.id}');
+          '[展示层] _loadUserProfile -> 收到结果 name=${profile.name}, id=${profile.id}',);
 
       if (!mounted) {
         return;

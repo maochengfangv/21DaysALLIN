@@ -12,6 +12,15 @@ enum ChatMessageStatus {
 }
 
 class ChatMessage {
+  ChatMessage({
+    required this.id,
+    required this.role,
+    required this.content,
+    required this.createdAt,
+    this.status = ChatMessageStatus.ready,
+    this.contentFormat = MessageContentFormat.markdown,
+    this.errorMessage,
+  });
   final String id;
   final ChatRole role;
   final String content;
@@ -19,16 +28,6 @@ class ChatMessage {
   final ChatMessageStatus status;
   final MessageContentFormat contentFormat;
   final String? errorMessage;
-
-  ChatMessage({
-    required this.id,
-    required this.role,
-    required this.content,
-    required this.createdAt,
-    this.status = ChatMessageStatus.ready,
-    this.contentFormat = MessageContentFormat.plainText,
-    this.errorMessage,
-  });
 
   ChatMessage copyWith({
     String? id,

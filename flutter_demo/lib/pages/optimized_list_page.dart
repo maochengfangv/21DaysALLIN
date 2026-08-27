@@ -9,15 +9,15 @@ import '../utils/scroll_activity_notifier.dart';
 import '../widgets/list_item_optimized.dart';
 
 class _LoadMoreFooter extends StatelessWidget {
-  final bool isLoading;
-  final bool hasMore;
-  final Future<void> Function() onRetry;
 
   const _LoadMoreFooter({
     required this.isLoading,
     required this.hasMore,
     required this.onRetry,
   });
+  final bool isLoading;
+  final bool hasMore;
+  final Future<void> Function() onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -54,13 +54,13 @@ class _LoadMoreFooter extends StatelessWidget {
 }
 
 class _FrameJankAggregator {
+
+  _FrameJankAggregator({required this.label});
   final String label;
 
   final List<FrameTiming> _buffer = <FrameTiming>[];
   Timer? _flushTimer;
   bool _started = false;
-
-  _FrameJankAggregator({required this.label});
 
   void start() {
     if (_started) return;
@@ -119,8 +119,8 @@ class _FrameJankAggregator {
 }
 
 class OptimizedListPage extends StatefulWidget {
-  static const routeName = '/optimized';
   const OptimizedListPage({super.key});
+  static const routeName = '/optimized';
 
   @override
   State<OptimizedListPage> createState() => _OptimizedListPageState();
@@ -141,10 +141,9 @@ class _OptimizedListPageState extends State<OptimizedListPage> {
     _scrollActivity =
         ScrollActivityNotifier(idleDebounce: const Duration(milliseconds: 200));
     _store = ItemStore(
-        pageSize: 50,
         totalLimit: 20000,
         repository:
-            const ItemRepository(simulatedDelay: Duration(milliseconds: 350)));
+            const ItemRepository(),);
     _jankAggregator = _FrameJankAggregator(label: 'Optimized');
     _jankAggregator.start();
     unawaited(_store.loadInitial());
@@ -215,7 +214,7 @@ class _OptimizedListPageState extends State<OptimizedListPage> {
                       alignment: Alignment.centerLeft,
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
+                          horizontal: 12, vertical: 10,),
                       color: theme.colorScheme.surfaceContainerHighest,
                       child: Text(text),
                     );
