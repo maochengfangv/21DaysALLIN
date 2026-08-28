@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -42,6 +43,13 @@ class WsChatDataSource {
       Duration(milliseconds: 500); // §5.6 0.5s
   static const _disconnectGracePeriod =
       Duration(milliseconds: 500); // §5.6 主动断留 500ms 给 done
+
+  static const _jitterRangeMs = 400; // 波动范围 +- 200ms
+  static const _minBackoffMs = 100; // 最小退避时间 100ms
+  static const _maxBackoffMs = 60000; // 最大退避时间 60s
+
+  /// 全局随机数生成器，用于指数退避重连
+  static final _reconnectRandom = Random();
 
   // ===== 内部状态 =====
   WebSocket? _socket;
@@ -226,8 +234,8 @@ class WsChatDataSource {
           _replyStreamController.add(ReplyStarted(messageId: msgId));
         } else {
           debugPrint(
-            '[Infra][WS] ⚠️ 收到 start 帧但 _currentAssistantMessageId 为空，' 
-            '已静默丢弃（可能原因：重连后多端广播 / 非本端发起的 chat，' 
+            '[Infra][WS] ⚠️ 收到 start 帧但 _currentAssistantMessageId 为空，'
+            '已静默丢弃（可能原因：重连后多端广播 / 非本端发起的 chat，'
             '后续多端同步能力完成后需改为按 session 路由）',
           );
         }
@@ -404,8 +412,19 @@ class WsChatDataSource {
     }
     final backoffMs = _initialReconnectDelay.inMilliseconds *
         (1 << _reconnectAttempts); // 位运算实现 2^n
+
+    final baseBackoffMs =
+        _initialReconnectDelay.inMilliseconds * (1 << _reconnectAttempts);
+    final jitterMs = _reconnectRandom.nextInt(_jitterRangeMs);
+    final finalBackoffMs = baseBackoffMs + jitterMs;
+    finalBackoffMs.clamp(_minBackoffMs, _maxBackoffMs);
+
     _reconnectAttempts++;
-    debugPrint('[Infra][WS] 第 $_reconnectAttempts 次重连，延迟 ${backoffMs}ms');
+    debugPrint(
+      '[Infra][WS] 第 $_reconnectAttempts 次重连，'
+      'base=${baseBackoffMs}ms jitter=${jitterMs >= 0 ? '+' : ''}$jitterMs ms '
+      '→ 实际延迟 ${backoffMs}ms',
+    );
     _reconnectTimer = Timer(Duration(milliseconds: backoffMs), () async {
       await connect();
       // 重连成功后补发 pending query（§5.6 要求）

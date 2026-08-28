@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../ai_chat_controller.dart';
+import 'message_list_change_notifier_test.dart';
 
 /// 【展示层支持 · Application层】
 /// 只在「输入栏相关」维度变化时触发通知：
@@ -25,32 +26,61 @@ class InputBarChangeNotifier extends ChangeNotifier {
   String _lastVoiceText = '';
   String _lastVoiceError = '';
 
+  // ===== P0 补强：rebuild 量化计数器（与 MessageList 对称） =====
+  int _rawEventCount = 0;
+  int _actualNotifyCount = 0;
+  int _lastReportedRawCount = 0;
+  static const int _reportInterval = 50;
+
+  /// 【量化指标导出】输入栏 Notifier 的筛选统计
+  RebuildFilterStats get debugStats => RebuildFilterStats(
+        name: 'InputBar',
+        rawCount: _rawEventCount,
+        actualNotify: _actualNotifyCount,
+      );
+
   void _onChange() {
+    if (kDebugMode) {
+      _rawEventCount++;
+    }
     final iLen = _source.selectedImages.length;
     final cs = _source.canSend;
     final csp = _source.canStop;
     final vl = _source.isVoiceListening;
     final vt = _source.voiceRecognizedText;
     final ve = _source.voiceInputError ?? '';
-    if (iLen != _lastImagesLen ||
+    final shouldNotify = iLen != _lastImagesLen ||
         cs != _lastCanSend ||
         csp != _lastCanStop ||
         vl != _lastVoiceListening ||
         vt != _lastVoiceText ||
-        ve != _lastVoiceError) {
+        ve != _lastVoiceError;
+    if (shouldNotify) {
       _lastImagesLen = iLen;
       _lastCanSend = cs;
       _lastCanStop = csp;
       _lastVoiceListening = vl;
       _lastVoiceText = vt;
       _lastVoiceError = ve;
+      if (kDebugMode) {
+        _actualNotifyCount++;
+      }
       notifyListeners();
+    }
+
+    if (kDebugMode &&
+        _rawEventCount - _lastReportedRawCount >= _reportInterval) {
+      _lastReportedRawCount = _rawEventCount;
+      debugPrint(debugStats.toString());
     }
   }
 
   @override
   void dispose() {
     _source.removeListener(_onChange);
+    if (kDebugMode && _rawEventCount > 0) {
+      debugPrint('[Perf][InputBar] dispose 时最终统计: ${debugStats.summary}');
+    }
     super.dispose();
   }
 }
