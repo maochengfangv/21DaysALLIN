@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../domain/entities/reply_stream_event.dart';
 import '../../domain/entities/session_realtime_event.dart';
 import '../dto/ws_frame_dto.dart';
+import 'idle_watchdog_manager.dart';
 
 /// ============================================================
 /// 【Infrastructure DataSource】WebSocket 对话核心管理器
@@ -54,7 +55,6 @@ class WsChatDataSource {
   // ===== 内部状态 =====
   WebSocket? _socket;
   Timer? _heartbeatTimer;
-  Timer? _idleTimer;
   int _lastActivityTs = 0;
   bool _disposed = false;
   bool _userInitiatedDisconnect = false; // 区分主动/被动断
@@ -66,6 +66,8 @@ class WsChatDataSource {
       StreamController<SessionRealtimeEvent>.broadcast();
   Completer<void>? _inFlightCompleter; // 单 in-flight 互斥锁（§5.3 chat 帧说明）
   String? _currentAssistantMessageId; // in-flight 期间的消息 ID，Domain 侧生成的
+  /// IdleWatchdogManager 注册 key（用自身身份，无需额外字符串）
+  Object get _idleWatchdogKey => this;
 
   // ============================================================
   // 【对外输出】两条独立流，供 Repository 层拉取
@@ -124,8 +126,7 @@ class WsChatDataSource {
   Future<void> _closeSocket() async {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
-    _idleTimer?.cancel();
-    _idleTimer = null;
+    IdleWatchdogManager.instance.unregister(_idleWatchdogKey);
     try {
       await _socket?.close();
     } catch (_) {}
@@ -155,24 +156,34 @@ class WsChatDataSource {
 
   // ============================================================
   // 【空闲看门狗】§5.1 30s 无任何收发 => 链路异常 => 重连
+  // P1 优化：接入全局 IdleWatchdogManager（1 个 Timer 扫描 N 个连接）
   // ============================================================
   void _startIdleWatchdog() {
-    _idleTimer?.cancel();
-    _idleTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (_disposed || _socket == null) return;
-      final elapsed = DateTime.now().millisecondsSinceEpoch - _lastActivityTs;
-      if (elapsed > _idleTimeout.inMilliseconds) {
-        debugPrint('[Infra][WS] ⚠️ 空闲超时 ${elapsed}ms>30s，判定链路异常，断开并重连');
-        unawaited(_closeSocket());
-        _emitSession(
-          const ConnectionStateChangedEvent(
-            connected: false,
-            description: 'WebSocket 30s 空闲超时，触发重连',
-          ),
-        );
-        _scheduleReconnect();
-      }
-    });
+    IdleWatchdogManager.instance.register(
+      _idleWatchdogKey,
+      // getter：每次扫描时实时拿 _lastActivityTs（闭包捕获 this）
+      () => _lastActivityTs,
+      // 超时回调：和原独立 Timer 的行为完全一致
+      _onIdleTimeout,
+      idleThreshold: _idleTimeout,
+    );
+  }
+
+  /// 空闲超时触发：断开 + 发事件 + 调度重连
+  void _onIdleTimeout() {
+    if (_disposed || _socket == null) return;
+    final elapsed = DateTime.now().millisecondsSinceEpoch - _lastActivityTs;
+    debugPrint(
+      '[Infra][WS] ⚠️ 空闲超时 ${elapsed}ms>30s，判定链路异常，断开并重连',
+    );
+    unawaited(_closeSocket());
+    _emitSession(
+      const ConnectionStateChangedEvent(
+        connected: false,
+        description: 'WebSocket 30s 空闲超时，触发重连',
+      ),
+    );
+    _scheduleReconnect();
   }
 
   void _touchActivity() {

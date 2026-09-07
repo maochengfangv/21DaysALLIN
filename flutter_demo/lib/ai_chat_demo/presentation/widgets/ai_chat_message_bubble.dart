@@ -14,6 +14,14 @@ class AiChatMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // P1-2 优化：每条气泡独立 RepaintBoundary，隔离滚动/邻居重绘
+    return RepaintBoundary(
+      key: ValueKey<String>('bubble_${message.id}'),
+      child: _buildBubble(context),
+    );
+  }
+
+  Widget _buildBubble(BuildContext context) {
     // 系统消息居中展示（时间/提示类）
     if (message.role == ChatRole.system) {
       return Padding(
@@ -81,14 +89,51 @@ class AiChatMessageBubble extends StatelessWidget {
     MessageBubblePresenter presenter,
     String displayText,
   ) {
+    // P1-2：内容区独立 RepaintBoundary，Markdown AST 构建不影响外层气泡
     if (presenter.isMarkdown(message)) {
-      return MarkdownBody(
-        data: displayText,
-        selectable: true,
-        onTapLink: (text, href, title) => _handleTapLink(context, href),
+      return RepaintBoundary(
+        child: MarkdownBody(
+          data: displayText,
+          selectable: true,
+          onTapLink: (text, href, title) => _handleTapLink(context, href),
+          sizedImageBuilder: _markdownSizedImageBuilder, // 预留：图片下采样/缓存钩子
+        ),
       );
     }
-    return Text(displayText);
+    return RepaintBoundary(child: Text(displayText));
+  }
+
+  /// Markdown 图片加载钩子（P1-2 预留，使用新版 sizedImageBuilder API）
+  ///   - 生产环境：在此接入 ResizeImage/ImageCache 分级/下采样
+  ///   - Demo 环境：返回默认 Image.network 即可
+  ///   - [MarkdownImageConfig] 包含 uri/title/alt/width/height 字段
+  Widget _markdownSizedImageBuilder(MarkdownImageConfig config) {
+    // TODO(perf): 接入 ResizeImage(Image.network(...), width: 640) 下采样
+    // TODO(perf): 接入 MemoryImageCache 分级监听系统内存压力清理
+    try {
+      if (config.uri.scheme == 'http' || config.uri.scheme == 'https') {
+        return Image.network(
+          config.uri.toString(),
+          width: config.width,
+          height: config.height,
+          errorBuilder: (_, e, __) => const Text('[图片加载失败]'),
+          loadingBuilder: (_, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            );
+          },
+        );
+      }
+      return Text('[无法加载图片: ${config.uri.scheme}]');
+    } catch (_) {
+      return const Text('[图片加载失败]');
+    }
   }
 
   /// 链接跳转：统一错误提示，不打印任何日志

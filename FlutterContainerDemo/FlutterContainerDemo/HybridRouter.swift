@@ -169,6 +169,7 @@ final class HybridRouter {
 
 enum HybridChannelNames {
     static let router = "com.example.hybrid/router"
+    static let routerV2 = "com.maocf.hybrid/router_v2"
     static let method = "com.maocf.hybrid/method"
     static let event = "com.maocf.hybrid/event"
     static let messageString = "com.maocf.hybrid/message_string"

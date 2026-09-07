@@ -1,23 +1,22 @@
 import 'dart:async';
 
+import 'package:flutter_demo/ai_chat_demo/application/ai_chat_controller.dart';
+import 'package:flutter_demo/ai_chat_demo/application/cancel_voice_input_use_case.dart';
+import 'package:flutter_demo/ai_chat_demo/application/chat_generation_state.dart';
+import 'package:flutter_demo/ai_chat_demo/application/observe_session_events_use_case.dart';
+import 'package:flutter_demo/ai_chat_demo/application/pick_image_from_gallery_use_case.dart';
+import 'package:flutter_demo/ai_chat_demo/application/send_chat_message_use_case.dart';
+import 'package:flutter_demo/ai_chat_demo/application/start_voice_input_use_case.dart';
+import 'package:flutter_demo/ai_chat_demo/application/stop_generation_use_case.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/entities/chat_message.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/entities/reply_stream_event.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/entities/selected_image_attachment.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/entities/session_realtime_event.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/entities/voice_input_result.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/repositories/ai_chat_repository.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/repositories/media_picker_repository.dart';
+import 'package:flutter_demo/ai_chat_demo/domain/repositories/voice_input_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import '../application/ai_chat_controller.dart';
-import '../application/cancel_voice_input_use_case.dart';
-import '../application/chat_generation_state.dart';
-import '../application/observe_session_events_use_case.dart';
-import '../application/pick_image_from_gallery_use_case.dart';
-import '../application/send_chat_message_use_case.dart';
-import '../application/start_voice_input_use_case.dart';
-import '../application/stop_generation_use_case.dart';
-import '../domain/entities/chat_message.dart';
-import '../domain/entities/reply_stream_event.dart';
-import '../domain/entities/selected_image_attachment.dart';
-import '../domain/entities/session_realtime_event.dart';
-import '../domain/entities/voice_input_result.dart';
-import '../domain/repositories/ai_chat_repository.dart';
-import '../domain/repositories/media_picker_repository.dart';
-import '../domain/repositories/voice_input_repository.dart';
 
 void main() {
   group('AiChatController', () {
