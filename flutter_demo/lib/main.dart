@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'ai_chat_demo/ai_chat_demo_module.dart';
 import 'ai_chat_demo/presentation/ai_chat_demo_page.dart';
@@ -8,6 +9,8 @@ import 'pages/baseline_list_page.dart';
 import 'pages/industry_animation_controls_page.dart';
 import 'pages/optimized_list_page.dart';
 import 'pages/thread_demo_page.dart';
+import 'bloc_demo/bloc_demo_page.dart';
+import 'riverpod/riverpod_demo_page.dart';
 
 final ValueNotifier<bool> performanceOverlayEnabled =
     ValueNotifier<bool>(false);
@@ -16,7 +19,7 @@ const String aiChatDemoRouteName = '/ai-chat-demo';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const DemoApp());
+  runApp(const ProviderScope(child: DemoApp()));
 }
 
 class DemoApp extends StatelessWidget {
@@ -47,6 +50,8 @@ class DemoApp extends StatelessWidget {
             aiChatDemoRouteName: (_) => AiChatDemoPage(
                   controller: buildAiChatController(),
                 ),
+            RiverpodDemoPage.routeName: (_) => const RiverpodDemoPage(),
+            BlocDemoPage.routeName: (_) => const BlocDemoPage(),
           },
         );
       },
@@ -147,6 +152,16 @@ class HomePage extends StatelessWidget {
           FilledButton.tonal(
             onPressed: () => _open(context, aiChatDemoRouteName),
             child: const Text('🤖 AI Chat：SSE + WebSocket Demo'),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonal(
+            onPressed: () => _open(context, RiverpodDemoPage.routeName),
+            child: const Text('🌊 Riverpod 最少验证 Demo'),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonal(
+            onPressed: () => _open(context, BlocDemoPage.routeName),
+            child: const Text('🧊 Bloc 最少代码实践'),
           ),
           const SizedBox(height: 16),
           const Text(
