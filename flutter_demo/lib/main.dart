@@ -7,6 +7,7 @@ import 'pages/animation_demo_page.dart';
 import 'pages/avatar_demo_four_layers_page.dart';
 import 'pages/baseline_list_page.dart';
 import 'pages/industry_animation_controls_page.dart';
+import 'pages/isolate_method_channel_demo_page.dart';
 import 'pages/optimized_list_page.dart';
 import 'pages/thread_demo_page.dart';
 import 'bloc_demo/bloc_demo_page.dart';
@@ -43,6 +44,8 @@ class DemoApp extends StatelessWidget {
             OptimizedListPage.routeName: (_) => const OptimizedListPage(),
             AnimationDemoPage.routeName: (_) => const AnimationDemoPage(),
             ThreadDemoPage.routeName: (_) => const ThreadDemoPage(),
+            IsolateMethodChannelDemoPage.routeName: (_) =>
+                const IsolateMethodChannelDemoPage(),
             IndustryAnimationControlsPage.routeName: (_) =>
                 const IndustryAnimationControlsPage(),
             AvatarDemoFourLayersPage.routeName: (_) =>
@@ -142,6 +145,12 @@ class HomePage extends StatelessWidget {
           FilledButton.tonal(
             onPressed: () => _open(context, ThreadDemoPage.routeName),
             child: const Text('🧵 Flutter 线程 / Isolate Demo'),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonal(
+            onPressed: () =>
+                _open(context, IsolateMethodChannelDemoPage.routeName),
+            child: const Text('📡 Isolate -> MethodChannel 闭环 Demo'),
           ),
           const SizedBox(height: 12),
           FilledButton.tonal(

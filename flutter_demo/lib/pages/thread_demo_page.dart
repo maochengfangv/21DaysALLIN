@@ -94,8 +94,106 @@ void _lifecycleHeartbeatWorker(SendPort sendPort) {
   });
 }
 
-class ThreadDemoPage extends StatefulWidget {
+// ============================================================================
+// 长连接 Isolate（复用）：双向 SendPort + taskId 映射 Completer
+// 对比 compute() 每次 spawn→kill 的开销，常驻 isolate 只需创建一次
+// ============================================================================
 
+class _IsolateTask {
+  const _IsolateTask(this.id, this.upperBound);
+  final int id;
+  final int upperBound;
+}
+
+class _IsolateError {
+  const _IsolateError(this.error, this.stackTrace);
+  final Object error;
+  final StackTrace stackTrace;
+}
+
+/// 子 isolate 入口：持续监听主 isolate 分发的任务，执行后回传结果
+void _persistentWorkerEntry(SendPort sendToMain) {
+  final receiveFromMain = ReceivePort();
+  // 第一步：把自己的 SendPort 回传给主 isolate，建立双向通道
+  sendToMain.send(receiveFromMain.sendPort);
+
+  receiveFromMain.listen((dynamic message) {
+    if (message is! _IsolateTask) return;
+    try {
+      final result = _countPrimesPayload(message.upperBound);
+      sendToMain.send(<String, Object>{'id': message.id, 'result': result});
+    } catch (e, stackTrace) {
+      sendToMain.send(<String, Object>{
+        'id': message.id,
+        'error': _IsolateError(e, stackTrace),
+      });
+    }
+  });
+}
+
+/// 长连接 Isolate 管理器（单例收口）
+class _PersistentIsolateWorker {
+  _PersistentIsolateWorker._();
+  static final _PersistentIsolateWorker instance = _PersistentIsolateWorker._();
+
+  Isolate? _isolate;
+  late SendPort _sendToIsolate;
+  late ReceivePort _receiveFromIsolate;
+  StreamSubscription<dynamic>? _subscription;
+
+  int _taskIdCounter = 0;
+  final Map<int, Completer<Map<String, Object>>> _pending = {};
+
+  bool get isReady => _isolate != null;
+
+  Future<void> ensureStarted() async {
+    if (isReady) return;
+    _receiveFromIsolate = ReceivePort();
+    _isolate = await Isolate.spawn<SendPort>(
+      _persistentWorkerEntry,
+      _receiveFromIsolate.sendPort,
+      debugName: 'persistent-prime-worker',
+    );
+    // 等待子 isolate 回传它的 SendPort
+    _sendToIsolate = await _receiveFromIsolate.first as SendPort;
+    _subscription = _receiveFromIsolate.listen(_onResult);
+  }
+
+  Future<Map<String, Object>> run(int upperBound) async {
+    if (!isReady) throw StateError('PersistentIsolateWorker not started');
+    final id = _taskIdCounter++;
+    final completer = Completer<Map<String, Object>>();
+    _pending[id] = completer;
+    _sendToIsolate.send(_IsolateTask(id, upperBound));
+    return completer.future;
+  }
+
+  void _onResult(dynamic message) {
+    if (message is! Map) return;
+    final id = message['id'] as int?;
+    if (id == null) return;
+    final completer = _pending.remove(id);
+    if (completer == null) return;
+
+    final error = message['error'];
+    if (error is _IsolateError) {
+      completer.completeError(error.error, error.stackTrace);
+    } else if (message['result'] is Map<String, Object>) {
+      completer.complete(message['result'] as Map<String, Object>);
+    }
+  }
+
+  void dispose() {
+    _subscription?.cancel();
+    _subscription = null;
+    _receiveFromIsolate.close();
+    _isolate?.kill(priority: Isolate.immediate);
+    _isolate = null;
+    _pending.clear();
+  }
+}
+
+class ThreadDemoPage extends StatefulWidget {
   const ThreadDemoPage({super.key});
   static const routeName = '/thread-demo';
 
@@ -136,6 +234,10 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
   StreamSubscription<dynamic>? _lifecycleSubscription;
   Isolate? _lifecycleIsolate;
 
+  // 长连接 Isolate 对比：记录累计 isolate 创建次数，体现复用价值
+  int _persistentReuseCount = 0;
+  int _computeSpawnCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -151,6 +253,7 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
     WidgetsBinding.instance.removeObserver(this);
     _teardownWorker();
     _teardownLifecycleScenario();
+    _PersistentIsolateWorker.instance.dispose();
     _pulseController.dispose();
     super.dispose();
   }
@@ -331,6 +434,7 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
       final wallClock = Stopwatch()..start();
       final result = await compute(_countPrimesPayload, _selectedWorkload);
       wallClock.stop();
+      _computeSpawnCount++;
 
       if (!mounted) return;
 
@@ -353,6 +457,61 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
         _status = 'compute() 失败：$error';
       });
       _addLog('compute() 失败');
+    }
+  }
+
+  Future<void> _runWithPersistentIsolate() async {
+    if (_isRunning) return;
+
+    setState(() {
+      _isRunning = true;
+      _hasProgress = false;
+      _progress = 0;
+      _lastStrategy = '长连接 Isolate（复用）';
+      _status = '复用同一个常驻 isolate，仅首次创建，后续零开销';
+    });
+    _addLog('开始长连接 Isolate 计算（第 ${_persistentReuseCount + 1} 次复用）');
+
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    try {
+      // 仅首次调用时才真正 spawn isolate
+      final initWatch = Stopwatch()..start();
+      await _PersistentIsolateWorker.instance.ensureStarted();
+      initWatch.stop();
+
+      final wallClock = Stopwatch()..start();
+      final result =
+          await _PersistentIsolateWorker.instance.run(_selectedWorkload);
+      wallClock.stop();
+
+      if (!mounted) return;
+
+      _persistentReuseCount++;
+      final merged = <String, Object>{
+        ...result,
+        'wallClockMs': wallClock.elapsedMilliseconds,
+        'initMs': initWatch.elapsedMilliseconds,
+        'reuseCount': _persistentReuseCount,
+      };
+
+      setState(() {
+        _isRunning = false;
+        _progress = 1;
+        _lastResult = merged;
+        _status = '常驻 isolate 已复用 $_persistentReuseCount 次，无重复创建开销';
+      });
+      _addLog(
+        '长连接 Isolate 完成，耗时 ${wallClock.elapsedMilliseconds}ms'
+        '（首次初始化 ${initWatch.elapsedMilliseconds}ms）',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isRunning = false;
+        _status = '长连接 Isolate 失败：$error';
+      });
+      _addLog('长连接 Isolate 失败');
     }
   }
 
@@ -590,6 +749,12 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                       _isRunning ? null : () => unawaited(_runWithCompute()),
                   child: const Text('compute()'),
                 ),
+                FilledButton.tonal(
+                  onPressed: _isRunning
+                      ? null
+                      : () => unawaited(_runWithPersistentIsolate()),
+                  child: const Text('长连接 Isolate（复用）'),
+                ),
                 OutlinedButton(
                   onPressed:
                       _isRunning ? null : () => unawaited(_runWithSpawn()),
@@ -649,6 +814,18 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                   subtitle: Text('${result['checksum']}'),
                 ),
               ),
+            if (result != null && result['reuseCount'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  '长连接 isolate 复用次数：${result['reuseCount']} 次，'
+                  '本次初始化耗时：${result['initMs']} ms\n'
+                  '（对比 compute() 每次都创建+销毁，已累计创建 $_computeSpawnCount 个 isolate）',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
             const SizedBox(height: 16),
             Card(
               child: Padding(
@@ -659,7 +836,8 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                     Text('I/O 密集型任务', style: theme.textTheme.titleMedium),
                     const SizedBox(height: 8),
                     const Text(
-                        '网络请求、数据库、文件读取通常是等待外部资源返回，核心是使用异步 API 让主 isolate 继续处理动画与交互，而不是为这类任务优先创建 isolate。',),
+                      '网络请求、数据库、文件读取通常是等待外部资源返回，核心是使用异步 API 让主 isolate 继续处理动画与交互，而不是为这类任务优先创建 isolate。',
+                    ),
                     const SizedBox(height: 12),
                     Text('最近执行：$_lastIoType'),
                     Text(_ioStatus),
@@ -671,22 +849,34 @@ class _ThreadDemoPageState extends State<ThreadDemoPage>
                         FilledButton.tonal(
                           onPressed: _ioRunning
                               ? null
-                              : () => unawaited(_runIoTask(
-                                  '网络请求', const Duration(seconds: 2),),),
+                              : () => unawaited(
+                                    _runIoTask(
+                                      '网络请求',
+                                      const Duration(seconds: 2),
+                                    ),
+                                  ),
                           child: const Text('模拟网络请求'),
                         ),
                         FilledButton.tonal(
                           onPressed: _ioRunning
                               ? null
-                              : () => unawaited(_runIoTask(
-                                  '数据库查询', const Duration(milliseconds: 1600),),),
+                              : () => unawaited(
+                                    _runIoTask(
+                                      '数据库查询',
+                                      const Duration(milliseconds: 1600),
+                                    ),
+                                  ),
                           child: const Text('模拟数据库查询'),
                         ),
                         FilledButton.tonal(
                           onPressed: _ioRunning
                               ? null
-                              : () => unawaited(_runIoTask(
-                                  '文件读取', const Duration(milliseconds: 1200),),),
+                              : () => unawaited(
+                                    _runIoTask(
+                                      '文件读取',
+                                      const Duration(milliseconds: 1200),
+                                    ),
+                                  ),
                           child: const Text('模拟文件读取'),
                         ),
                       ],

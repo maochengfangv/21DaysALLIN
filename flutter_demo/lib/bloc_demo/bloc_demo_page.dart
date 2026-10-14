@@ -47,4 +47,14 @@ class BlocDemoPage extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> testRun() async {
+    print('1');
+    Future.microtask(() => print('2'));
+    Future(() => print('3'));
+    await Future(() => print('4'));
+    print('5');
+    Future.microtask(() => print('6'));
+    print('7');
+  }
 }
