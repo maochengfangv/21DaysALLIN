@@ -1,0 +1,9 @@
+{
+  "@@locale": "zh",
+  "appTitle": "Flutter Demo Playground",
+  "compareSectionTitle": "对比入口",
+  "compareSectionDesc": "Baseline：故意包含常见卡顿因素\nOptimized：懒构建 + 分页 + RepaintBoundary + 局部状态 + 图片缓存/尺寸 + 滚动中占位 + 防抖 + 指标汇总输出",
+  "enterBaseline": "进入 Baseline（未优化）",
+  "enterOptimized": "进入 Optimized（已优化）",
+  "performanceTip": "建议在 Profile 模式 + DevTools Performance 面板下对比。\n可先打开 Overlay 开关进行肉眼观察。"
+}

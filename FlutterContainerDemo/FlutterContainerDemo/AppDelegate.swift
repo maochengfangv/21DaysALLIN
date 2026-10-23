@@ -48,7 +48,7 @@ final class FlutterEngineProvider {
         GeneratedPluginRegistrant.register(with: engine)
         NativePlatformViewRegistrar.register(with: engine)
 
-        HybridRouter.shared.attach(engine: engine)
+        // V2 路由协议：router_v2 为 Native ↔ Flutter 的唯一导航通道
         HybridChannelBridge.shared.attach(engine: engine)
         FlutterChannelRouterBridge.shared.attach(engine: engine)
 

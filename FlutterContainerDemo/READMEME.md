@@ -9,11 +9,17 @@ iOS 原生 App **棕地集成 Flutter**（Add-to-App），展示 Flutter Engine 
 ```
 FlutterContainerDemo/
 ├── FlutterContainerDemo/
-│   ├── AppDelegate.swift                    # FlutterEngine 预启动
+│   ├── AppDelegate.swift                    # FlutterEngine 预启动 + 通道挂载
 │   ├── SceneDelegate.swift                  # Scene 生命周期 + NavigationController 初始化
-│   ├── ViewController.swift                 # 原生首页（触发 Flutter 路由入口）
+│   ├── ViewController.swift                 # 原生首页（6 个 V2 路由演示入口）
+│   ├── AppRouter.swift                      # 统一跳转入口 + 异常/登录兜底
+│   ├── RouteRegistry.swift                  # 路由元信息注册表 + Deeplink 解析
+│   ├── RouteModels.swift                    # 路由模型 / 错误码 / PendingRequestStore
+│   ├── ContainerDispatcher.swift            # Native/Flutter 分发 + V2 通道桥
+│   ├── BackDispatcher.swift                 # 返回事件统一分流
+│   ├── RouteLogger.swift                    # 路由埋点与统计快照
 │   ├── HybridFlutterViewController.swift    # 自定义 FlutterViewController 子类
-│   ├── HybridRouter.swift                   # 双向路由系统（核心）
+│   ├── HybridRouter.swift                   # 通道名契约 + 业务 Channel 桥
 │   ├── NativePageViewController.swift       # Flutter→Native 跳转的目标页面
 │   └── NativePlatformView.swift             # FlutterPlatformView 原生渲染实现
 ├── Podfile                                  # CocoaPods：引入 ../flutter_module
@@ -28,12 +34,18 @@ AppDelegate / SceneDelegate
         ├── engine.run()              // 启动 FlutterEngine
         ├── GeneratedPluginRegistrant // 注册 Flutter Plugins
         ├── NativePlatformViewRegistrar.register()  // 注册 PlatformView
-        ├── HybridRouter.shared.attach()    // 注册路由 Channel
-        └── HybridChannelBridge.shared.attach()  // 注册业务 Channel
+        ├── HybridChannelBridge.shared.attach()          // 注册业务 Channel
+        └── FlutterChannelRouterBridge.shared.attach()   // 注册 V2 路由通道
 
 ViewController (原生首页)
-  └── HybridRouter.showFlutter(route: "/channel_demos", params:..., onResult:...)
-        └── 创建 HybridFlutterViewController → 通过 MethodChannel 通知 Flutter 渲染
+  └── AppRouter.shared.open(routeName: "channel_demos", params:...)
+        ├── RouteRegistry 校验（注册表 / needLogin / 版本 / Deeplink 白名单）
+        ├── PendingRequestStore 暂存 requestId → onResult
+        └── ContainerDispatcher.dispatch()
+              ├── .native  → 直接 push 原生 VC
+              └── .flutter → 创建 HybridFlutterViewController
+                             → showRouteV2 下发 routeName
+                             → 等 routeReadyV2 后完成 open 回调
 ```
 
 ---
@@ -57,8 +69,8 @@ final class FlutterEngineProvider {
         engine.run()                                      // 启动引擎
         GeneratedPluginRegistrant.register(with: engine)  // 注册所有 Plugin
         NativePlatformViewRegistrar.register(with: engine)
-        HybridRouter.shared.attach(engine: engine)        // 挂载路由系统
-        HybridChannelBridge.shared.attach(engine: engine) // 挂载业务 Channel
+        HybridChannelBridge.shared.attach(engine: engine)         // 挂载业务 Channel
+        FlutterChannelRouterBridge.shared.attach(engine: engine)  // 挂载 V2 路由通道
         isRunning = true
     }
 }
@@ -68,41 +80,83 @@ final class FlutterEngineProvider {
 - **单例 + 幂等**：`isRunning` 标记防止重复初始化
 - **命名引擎**：`FlutterEngine(name:)` 支持同一进程内多引擎场景
 
-### 二、双向路由系统（HybridRouter）
+### 二、V2 路由体系
+
+分层：**入口层动态，能力层静态**。宿主统一入口 `AppRouter` 只负责校验与编排，
+真正的容器分发交给 `ContainerDispatcher`，返回事件交给 `BackDispatcher`。
 
 ```
-┌─────────────┐  showFlutter() + params    ┌──────────────────┐
-│  原生 Navigation │ ──────────────────────────▶ │  Flutter Module   │
-│  Controller      │ ◀────────────────────────── │  (flutter_module)  │
-└─────────────┘  onResult() payload          └──────────────────┘
-       ▲                                              │
-       │          openNative(route, params)            │
-       └──────────────────────────────────────────────┘
+ViewController / Deeplink / Flutter 回跳
+        │
+        ▼
+   AppRouter.open(routeName:params:source:onResult:)
+        │  ① PendingRequestStore.isDuplicateOpen  ← 0.5s 去重窗口
+        │  ② RouteRegistry.resolveMeta            ← 注册表 / path→routeName
+        │  ③ RouteRegistry.validate               ← 必填参数 / needLogin / 版本 / Deeplink 安全
+        │  ④ FlutterEngineProvider.startIfNeeded  ← Flutter 路由预热
+        │  ⑤ PendingRequestStore.store            ← requestId → onResult
+        ▼
+   ContainerDispatcher.dispatch
+        ├── .native  → UINavigationController push/present/replace
+        └── .flutter → HybridFlutterViewController
+                        └── FlutterChannelRouterBridge.showRouteV2
+                                   │
+                                   ▼
+                        flutter_module  HybridGateway._applyRoute
+                                   │  路由表命中 → 渲染
+                                   ▼
+                        routeReadyV2 { requestId, routeName, canPop }
+                                   │
+                                   ▼
+                ContainerDispatcher.handleFlutterRouteReady → 结束 open 回调
 ```
 
-#### 路由 Channel 命令
+失败治理：`routeNotFound / invalidParams / engineNotReady` → `route_error` 兜底页；
+`notLogin` → 先跳 `login`，登录成功后用 `loginResumeRequest` 恢复原始路由。
 
-| 方向 | MethodChannel 方法 | 用途 |
-|------|-------------------|------|
-| Native→Flutter | `showRoute(route, params, requestId, navStyle)` | 通知 Flutter 渲染指定页面 |
-| Flutter→Native | `routeReady(route, requestId)` | Flutter 页面渲染完成，Native 可以 Push |
-| Flutter→Native | `openNative(route, params)` | Flutter 内部触发打开原生页面 |
-| Flutter→Native | `closeFlutter(result)` | Flutter 页面关闭，携带返回值 |
-| Native→Flutter | `resetToBootstrap` | 清除 Flutter 导航栈 |
-| Native→Flutter | `flutterReady` | Flutter Engine 初始化完成信号 |
+#### 路由 Channel 命令（`com.maocf.hybrid/router_v2`）
 
-#### Route Ready 协议（核心创新）
+| 方向 | 方法 | 参数 | 用途 |
+|------|------|------|------|
+| Native→Flutter | `showRouteV2` | `routeName / path / params / navStyle / requestId / pageId / animation / presentMode / isFirstEnter` | 下发路由，Flutter 侧渲染目标页面 |
+| Native→Flutter | `systemBackV2` | `source / timestamp` | 宿主把返回事件交给 Flutter 内部消费 |
+| Native→Flutter | `resetToBootstrapV2` | — | 容器已弹出，要求 Flutter 栈复位 |
+| Flutter→Native | `flutterReadyV2` | `version` | Flutter 通道就绪（配合 VC `viewDidAppear` 冲刷 pendingPush） |
+| Flutter→Native | `routeReadyV2` | `requestId / routeName / path / canPop` | 页面渲染完成，宿主结束 loading / 完成 open 回调 |
+| Flutter→Native | `routeNotFoundV2` | `requestId / routeName / path` | routeName 未注册，宿主走 `route_error` 兜底 |
+| Flutter→Native | `canPopV2` | `canPop / routeName / requestId` | 栈深度变化上报，驱动 BackDispatcher 分流 |
+| Flutter→Native | `openNativeV2` | `routeName / params` | Flutter → Native 跳转 |
+| Flutter→Native | `closeFlutterV2` | `requestId / routeName / result / cancelled` | Flutter 主动关闭容器并回传结果 |
+
+> 通道名为**编译期契约**：iOS 侧 `HybridChannelNames`（HybridRouter.swift）
+> 与 Flutter 侧 `HybridChannelNames`（lib/hybrid/hybrid_channels.dart）必须同步修改。
+
+#### Route Ready 协议
 
 ```
-1. Native 调用 showFlutter(from:route:params:navStyle:onResult:)
-2. Native 创建 HybridFlutterViewController，暂不 Push
-3. Native 通过 MethodChannel 向 Flutter 发送 showRoute
-4. Flutter 收到后渲染目标页面
-5. Flutter 在 addPostFrameCallback 中回复 routeReady
-6. Native 收到 routeReady，执行 navigationController.push()
+1. AppRouter 完成校验，ContainerDispatcher 创建 HybridFlutterViewController
+2. 若 Flutter 容器已在栈顶 → 直接 showRouteV2；否则先入 pendingPush，等 VC viewDidAppear 冲刷
+3. Flutter HybridGateway 命中路由表 → pushNamedAndRemoveUntil(routeName, removeUntil: false)
+4. Flutter 在 addPostFrameCallback 中回 routeReadyV2（含 canPop）
+5. 宿主 ContainerDispatcher.handleFlutterRouteReady 结束 open 回调
 ```
 
-**这彻底解决了 Flutter 混合导航白屏问题**：确保 Flutter 页面渲染完成后 Native 才执行 Push 动画，用户看不到空白帧。
+**这彻底解决了 Flutter 混合导航白屏问题**：宿主在 Flutter 页面渲染完成后才结束路由回调，
+用户看不到空白帧。
+
+#### 返回事件分流（BackDispatcher）
+
+宿主返回（原生导航栏按钮 / 侧滑）统一进入 `BackDispatcher.handleBackPress`，
+依据 Flutter 上报的 `flutterCanPop` 做四类分流：
+
+| 条件 | 动作 |
+|------|------|
+| 栈顶是 Flutter 容器 且 `flutterCanPop == true` | 下发 `systemBackV2`，Flutter 内部出栈 |
+| 栈顶是 Flutter 容器 且 `flutterCanPop == false` | 宿主 pop 掉整个 Flutter 容器，并 resolve 结果为 cancelled |
+| 栈顶非 Flutter 容器 | `fallthroughToNativePop`，走原生 pop/dismiss |
+| Flutter 主动 `closeFlutterV2` | `handleFlutterInitiatedClose`，宿主 pop 容器并回传 payload |
+
+`popInFlight` + `pendingPopToken` 保证快速连点返回时的幂等性。
 
 #### 导航栏三种风格（NavStyle）
 
@@ -116,12 +170,20 @@ final class FlutterEngineProvider {
 
 ```swift
 // Native 侧监听
-HybridRouter.shared.showFlutter(from: self, route: "/counter", params: [...]) { result in
-    self.resultLabel.text = "Result: \(String(describing: result))"
+let reqId = AppRouter.shared.pushForResult(
+    routeName: "counter_demo",
+    params: ["initialCount": 10],
+    from: self
+) { result in
+    self.resultLabel.text = "payload: \(String(describing: result.payload))"
 }
+```
 
+```dart
 // Flutter 侧关闭时携带结果
-closeFlutterWithResult({'counter': 42, 'from': 'flutter'})
+HybridGateway.instance.closeFlutter(
+  result: {'counter': 42, 'from': 'ios_pushForResult'},
+);
 ```
 
 ### 三、HybridFlutterViewController
@@ -130,30 +192,28 @@ closeFlutterWithResult({'counter': 42, 'from': 'flutter'})
 final class HybridFlutterViewController: FlutterViewController {
     let navStyle: HybridNavStyle
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        navigationController?.setNavigationBarHidden(navStyle != .native, animated: animated)
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        if isMovingFromParent {
-            navigationController?.setNavigationBarHidden(false, animated: animated)
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // 冲刷容器创建前暂存的路由指令，保证首帧即命中目标页面
+        if let reqId = currentRequestId {
+            FlutterChannelRouterBridge.shared.flushPendingPush(for: reqId)
         }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        if isMovingFromParent {
-            HybridRouter.shared.handleFlutterViewControllerDismissed()
+        if isMovingFromParent || isBeingDismissed {
+            ContainerDispatcher.shared.handleFlutterContainerDismissed(requestId: currentRequestId)
+            FlutterChannelRouterBridge.shared.notifyFlutterResetToBootstrap()
+            // resolve 结果（cancelled）
         }
     }
 }
 ```
 
+- `viewDidAppear` 冲刷 pendingPush，解决「容器先创建、路由后到达」的时序问题
 - `isMovingFromParent` 精准判断是 pop 还是 push 其他页面覆盖
-- 离开时恢复原生导航栏状态
-- 通知 `HybridRouter` 清理暂存的路由请求和回调
+- 容器离场时通知 Flutter 栈复位，并 resolve 未完成的 requestId
 
 ### 四、四种 Channel 通信（HybridChannelBridge）
 
@@ -307,10 +367,13 @@ end
 
 | FlutterContainerDemo (Native) | flutter_module (Flutter) |
 |------------------------------|--------------------------|
-| `HybridRouter.attach(engine:)` → 注册 `com.example.hybrid/router` | `HybridApp._onMethodCall` 处理 `pushRoute/showRoute/resetToBootstrap` |
+| `FlutterChannelRouterBridge.attach(engine:)` → 注册 `com.maocf.hybrid/router_v2` | `HybridGateway.bootstrap(resolver:)` 安装 `routerV2` 方法处理器 |
+| `showRouteV2/systemBackV2/resetToBootstrapV2` 下发导航指令 | `HybridGateway._handleNativeCall` 分发 → `HybridRouteTable` 解析页面 |
+| 等待 `routeReadyV2`（含 canPop）结束 loading / 完成 open 回调 | `addPostFrameCallback(() => _notifyRouteReady(args))` |
+| `BackDispatcher` 依据 `canPopV2` 决定返回事件分流 | `HybridNavigatorObserver` 在栈变化后 `reportCanPop()` |
 | `HybridChannelBridge.attach(engine:)` → 注册 method/event/message Channel | `HybridChannels` + `MethodChannelDemoPage` 等页面 |
-| `NativePlatformViewRegistrar.register()` → `com.maocf.hybrid/native_label_view` | `PlatformViewDemoPage` 中的 `UiKitView` |
-| `showRoute("routeReady")` 等待 Flutter 信号 | `addPostFrameCallback(() => invokeMethod('routeReady'))` |
+| `NativePlatformViewRegistrar.register()` → `com.maocf.hybrid/native_label_view` | `HybridChannelNames.nativeViewType` + `PlatformViewDemoPage` 中的 `UiKitView` |
+| 通道名契约 `HybridChannelNames`（HybridRouter.swift） | 通道名契约 `HybridChannelNames`（hybrid/hybrid_channels.dart） |
 
 ---
 
@@ -325,4 +388,4 @@ open FlutterContainerDemo.xcworkspace
 
 ## 技术标签
 
-`iOS` `Flutter Add-to-App` `棕地集成` `FlutterEngine` `双向路由` `Route Ready` `MethodChannel` `EventChannel` `BasicMessageChannel` `PlatformView` `UiKitView` `WeakBox` `CocoaPods`
+`iOS` `Flutter Add-to-App` `棕地集成` `FlutterEngine` `V2 路由协议` `AppRouter` `RouteRegistry` `BackDispatcher` `Route Ready` `canPop 同步` `MethodChannel` `EventChannel` `BasicMessageChannel` `PlatformView` `UiKitView` `WeakBox` `CocoaPods`

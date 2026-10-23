@@ -1,0 +1,9 @@
+{
+  "@@locale": "en",
+  "appTitle": "Flutter Demo Playground",
+  "compareSectionTitle": "Comparison Entry",
+  "compareSectionDesc": "Baseline: intentionally includes common jank factors\nOptimized: lazy build + pagination + RepaintBoundary + local state + image cache/size + placeholder while scrolling + debounce + metrics summary",
+  "enterBaseline": "Open Baseline",
+  "enterOptimized": "Open Optimized",
+  "performanceTip": "Compare in Profile mode with the DevTools Performance panel.\nYou can first enable the Overlay switch for a visual check."
+}
