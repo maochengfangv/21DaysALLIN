@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 
 import 'ai_chat_demo/ai_chat_demo_module.dart';
 import 'ai_chat_demo/presentation/ai_chat_demo_page.dart';
 import 'bloc_demo/bloc_demo_page.dart';
+import 'getx_demo/getx_demo_binding.dart';
+import 'getx_demo/getx_demo_page.dart';
 import 'l10n/app_localizations.dart';
 import 'pages/animation_demo_page.dart';
 import 'pages/avatar_demo_four_layers_page.dart';
@@ -33,7 +36,7 @@ class DemoApp extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: performanceOverlayEnabled,
       builder: (context, enabled, _) {
-        return MaterialApp(
+        return GetMaterialApp(
           debugShowCheckedModeBanner: false,
           showPerformanceOverlay: enabled,
           localizationsDelegates: const [
@@ -49,6 +52,13 @@ class DemoApp extends StatelessWidget {
             useMaterial3: true,
           ),
           home: const HomePage(),
+          getPages: [
+            GetPage(
+              name: GetxDemoPage.routeName,
+              page: () => const GetxDemoPage(),
+              binding: GetxDemoBinding(),
+            ),
+          ],
           routes: {
             BaselineListPage.routeName: (_) => const BaselineListPage(),
             OptimizedListPage.routeName: (_) => const OptimizedListPage(),
@@ -175,6 +185,11 @@ class HomePage extends StatelessWidget {
           FilledButton.tonal(
             onPressed: () => _open(context, RiverpodDemoPage.routeName),
             child: const Text('🌊 Riverpod 最少验证 Demo'),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonal(
+            onPressed: () => Get.toNamed(GetxDemoPage.routeName),
+            child: const Text('⚡️ GetX 最少代码实践'),
           ),
           const SizedBox(height: 12),
           FilledButton.tonal(
