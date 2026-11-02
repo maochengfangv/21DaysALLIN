@@ -7,7 +7,7 @@ enum HybridNavStyle: String {
     case none
 }
 
-final class HybridFlutterViewController: FlutterViewController, UIGestureRecognizerDelegate {
+final class HybridFlutterViewController: FlutterViewController {
     let navStyle: HybridNavStyle
     var currentRequestId: String?
     var routeName: String?
@@ -101,7 +101,7 @@ final class HybridFlutterViewController: FlutterViewController, UIGestureRecogni
         BackDispatcher.shared.handleBackPress(source: .nativeNavBarButton, from: self)
     }
 
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === navigationController?.interactivePopGestureRecognizer {
             let consumed = BackDispatcher.shared.handleBackPress(source: .nativeSwipe, from: self)
             return !consumed
